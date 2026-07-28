@@ -3,6 +3,31 @@
   flex-direction: column;
 }
 
+.menu-card-link {
+  display: block;
+  overflow: hidden;
+}
+
+.menu-card-link img {
+  transition: transform 0.55s cubic-bezier(.2, .7, .2, 1);
+}
+
+.menu-card-link:hover img,
+.menu-card-link:focus-visible img {
+  transform: scale(1.035);
+}
+
+.menu-card-title-link:hover,
+.menu-card-title-link:focus-visible {
+  color: var(--orange);
+}
+
+.menu-card-title-link:focus-visible,
+.menu-card-link:focus-visible {
+  outline: 2px solid var(--orange);
+  outline-offset: 3px;
+}
+
 .quick-add {
   align-items: center;
   background: transparent;
