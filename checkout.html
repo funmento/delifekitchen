@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Review your DeLife Kitchen order and continue to secure payment." />
+    <title>Checkout | DeLife Kitchen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="checkout.css" />
+  </head>
+  <body>
+    <div class="announcement">Secure checkout &middot; Collection or delivery &middot; Payment powered by Stripe</div>
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="DeLife Kitchen home">DeLife<span>Kitchen</span></a>
+      <a class="checkout-back" href="menu.html"><span aria-hidden="true">←</span> Back to menu</a>
+    </header>
+    <main class="checkout-main">
+      <section class="checkout-intro">
+        <p class="eyebrow">Almost at your table</p>
+        <h1>Let’s finish<br /><em>your order.</em></h1>
+        <p>Tell us who the order is for and how you would like to receive it. Secure payment follows on Stripe.</p>
+      </section>
+      <section class="checkout-panel" aria-labelledby="checkout-heading">
+        <div class="checkout-panel-heading">
+          <div><span>01</span><h2 id="checkout-heading">Your details</h2></div>
+          <p>All fields marked * are required.</p>
+        </div>
+        <form id="checkout-form">
+          <div class="field-grid">
+            <label class="field"><span>Name *</span><input type="text" name="name" autocomplete="name" maxlength="100" required /></label>
+            <label class="field"><span>Email *</span><input type="email" name="email" autocomplete="email" maxlength="200" required /></label>
+            <label class="field field-wide"><span>Phone number *</span><input type="tel" name="phone" autocomplete="tel" maxlength="40" required /></label>
+          </div>
+
+          <fieldset class="fulfilment-fieldset">
+            <legend>How would you like your order? *</legend>
+            <div class="fulfilment-options">
+              <label><input type="radio" name="fulfilment" value="collection" checked /><span><b>Collection</b><small>Pick up from DeLife Kitchen</small></span></label>
+              <label><input type="radio" name="fulfilment" value="delivery" /><span><b>Delivery</b><small>Bring it to your address</small></span></label>
+            </div>
+          </fieldset>
+
+          <div id="delivery-fields" class="delivery-fields" hidden>
+            <label class="field"><span>Delivery address *</span><textarea name="address" autocomplete="street-address" rows="3" maxlength="300"></textarea></label>
+            <label class="field"><span>Postcode *</span><input type="text" name="postcode" autocomplete="postal-code" maxlength="20" /></label>
+          </div>
+
+          <label class="field order-notes"><span>Order notes</span><textarea name="notes" rows="3" maxlength="400" placeholder="Allergies, preferred collection time, or anything we should know"></textarea></label>
+
+          <div class="order-review">
+            <div class="order-review-title"><span>02</span><h2>Your order</h2><a href="menu.html">Edit order</a></div>
+            <div id="order-items" class="order-items"></div>
+            <div class="order-total"><span>Total</span><strong id="order-total">£0.00</strong></div>
+          </div>
+
+          <div id="checkout-error" class="checkout-error" role="alert" hidden></div>
+          <button id="checkout-submit" class="checkout-submit" type="submit">Continue to secure payment <span aria-hidden="true">↗</span></button>
+          <p class="secure-note">You’ll review the final payment on Stripe before being charged.</p>
+        </form>
+      </section>
+    </main>
+    <script src="checkout.js"></script>
+  </body>
+</html>
