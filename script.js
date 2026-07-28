@@ -15,14 +15,26 @@ if (toggle && nav) {
 
 const menuCards = document.querySelectorAll('.menu-card');
 const quickOrder = document.querySelector('.quick-order');
+const productCheckout = document.querySelector('.quick-checkout');
+
+if (productCheckout) {
+  const productId = window.location.pathname.split('/').pop().replace('.html', '');
+  productCheckout.href = `../checkout.html?item=${encodeURIComponent(productId)}`;
+}
 
 if (menuCards.length && quickOrder) {
   const order = new Map();
+  let storedOrder = [];
+  try {
+    storedOrder = JSON.parse(sessionStorage.getItem('delifeOrder') || '[]');
+    if (!Array.isArray(storedOrder)) storedOrder = [];
+  } catch {
+    sessionStorage.removeItem('delifeOrder');
+  }
   const countLabel = quickOrder.querySelector('.quick-order-count');
   const totalLabel = quickOrder.querySelector('.quick-order-total');
   const clearButton = quickOrder.querySelector('.quick-order-clear');
   const checkoutLink = quickOrder.querySelector('.quick-order-checkout');
-  const orderUrl = checkoutLink.href;
   const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 
   const updateOrder = () => {
@@ -34,14 +46,14 @@ if (menuCards.length && quickOrder) {
     countLabel.textContent = `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
     totalLabel.textContent = currency.format(orderTotal);
 
-    const summary = items.map(item => `${item.quantity}x ${item.name}`).join(', ');
-    checkoutLink.href = summary ? `${orderUrl}?order=${encodeURIComponent(summary)}` : orderUrl;
+    sessionStorage.setItem('delifeOrder', JSON.stringify(items));
   };
 
   menuCards.forEach((card, index) => {
     const name = card.querySelector('h2').textContent.trim();
     const price = Number(card.querySelector('.price').textContent.replace(/[^0-9.]/g, ''));
-    const itemId = `menu-item-${index}`;
+    const productLink = card.querySelector('.menu-card-link').getAttribute('href');
+    const itemId = productLink.split('/').pop().replace('.html', '') || `menu-item-${index}`;
     const button = document.createElement('button');
 
     button.className = 'quick-add';
@@ -49,8 +61,15 @@ if (menuCards.length && quickOrder) {
     button.innerHTML = '<span>Add to order</span><b aria-hidden="true">+</b>';
     button.setAttribute('aria-label', `Add ${name} to order`);
 
+    const storedItem = storedOrder.find(item => item.id === itemId);
+    if (storedItem) {
+      order.set(itemId, { id: itemId, name, price, quantity: storedItem.quantity });
+      button.classList.add('added');
+      button.querySelector('span').textContent = `Add another · ${storedItem.quantity}`;
+    }
+
     button.addEventListener('click', () => {
-      const item = order.get(itemId) || { name, price, quantity: 0 };
+      const item = order.get(itemId) || { id: itemId, name, price, quantity: 0 };
       item.quantity += 1;
       order.set(itemId, item);
       button.classList.add('added');
@@ -70,4 +89,6 @@ if (menuCards.length && quickOrder) {
     });
     updateOrder();
   });
+
+  updateOrder();
 }
