@@ -48,7 +48,11 @@
             <label class="field"><span>Postcode *</span><input type="text" name="postcode" autocomplete="postal-code" maxlength="20" /></label>
           </div>
 
-          <label class="field order-notes"><span>Order notes</span><textarea name="notes" rows="3" maxlength="400" placeholder="Allergies, preferred collection time, or anything we should know"></textarea></label>
+          <div id="collection-fields" class="delivery-fields collection-fields">
+            <label class="field"><span>Preferred collection time *</span><input type="text" name="collectionTime" maxlength="100" placeholder="e.g. Saturday at 6:30pm" required /></label>
+          </div>
+
+          <label class="field order-notes"><span>Special instructions or allergies</span><textarea name="notes" rows="3" maxlength="400" placeholder="Allergies or anything else we should know"></textarea></label>
 
           <div class="order-review">
             <div class="order-review-title"><span>02</span><h2>Your order</h2><a href="menu.html">Edit order</a></div>
