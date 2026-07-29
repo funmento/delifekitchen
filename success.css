@@ -1,0 +1,37 @@
+.status-reference {
+  border: 1px solid #5b6155;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0 auto 31px;
+  min-width: 280px;
+  padding: 15px 24px;
+}
+
+.status-reference span {
+  color: #aeb2a7;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.status-reference strong {
+  color: var(--yellow);
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  letter-spacing: .03em;
+}
+
+.status-reference.error strong {
+  color: #f1a38d;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .status-reference {
+    min-width: 0;
+    width: 100%;
+  }
+}

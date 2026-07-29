@@ -1,0 +1,10 @@
+{
+  "name": "delife-kitchen",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/database": "latest",
+    "drizzle-kit": "beta",
+    "drizzle-orm": "beta"
+  }
+}
