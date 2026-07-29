@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="checkout.css" />
+    <link rel="stylesheet" href="success.css" />
   </head>
   <body>
     <div class="announcement">Payment complete &middot; Your order is with DeLife Kitchen</div>
@@ -20,9 +21,13 @@
         <p class="eyebrow">Order received</p>
         <h1>Thank you.<br /><em>Food is next.</em></h1>
         <p>Your payment was successful and your order details have been sent to DeLife Kitchen. Keep an eye on your phone or email for any updates.</p>
+        <div id="order-reference" class="status-reference" aria-live="polite">
+          <span>Order reference</span>
+          <strong id="order-reference-value">Loading…</strong>
+        </div>
         <div class="status-actions"><a class="button light" href="index.html">Back to home</a><a class="button" href="menu.html">View the menu</a></div>
       </section>
     </main>
-    <script>sessionStorage.removeItem('delifeOrder');</script>
+    <script src="success.js"></script>
   </body>
 </html>

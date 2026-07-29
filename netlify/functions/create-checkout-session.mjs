@@ -1,22 +1,7 @@
-const catalog = {
-  'fried-plantain': { name: 'Fried Plantain', unitAmount: 1000 },
-  'delife-yamarita': { name: 'DeLife Yamarita', unitAmount: 1200 },
-  'egusi-soup': { name: 'Egusi Soup', unitAmount: 1500 },
-  'fish-peppersoup': { name: 'Fish Peppersoup', unitAmount: 700 },
-  'fried-rice': { name: 'Fried Rice', unitAmount: 1800 },
-  'jollof-rice-chicken': { name: 'Jollof Rice & Chicken', unitAmount: 2000 },
-  'jollof-rice': { name: 'Jollof Rice', unitAmount: 1200 },
-  'meat-pie': { name: 'Meat Pie', unitAmount: 1500 },
-  'moi-moi': { name: 'Moi Moi', unitAmount: 700 },
-  nkwobi: { name: 'Nkwobi', unitAmount: 1500 },
-  'nsala-soup': { name: 'Nsala Soup', unitAmount: 1300 },
-  'okra-soup': { name: 'Okra Soup', unitAmount: 1700 },
-  'stewed-chicken': { name: 'Stewed Chicken', unitAmount: 1400 },
-  'stewed-turkey': { name: 'Stewed Turkey', unitAmount: 1300 },
-  'stewed-turkey-2': { name: 'Stewed Turkey', unitAmount: 1300 },
-  'tilapia-fish': { name: 'Tilapia Fish', unitAmount: 3300 },
-  'yam-tomato-stew': { name: 'Yam & Tomato Stew', unitAmount: 3300 },
-};
+import { eq } from 'drizzle-orm';
+import { db } from '../../db/index.js';
+import { orders } from '../../db/schema.js';
+import { catalog } from '../lib/catalog.mjs';
 
 const clean = (value, maxLength) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 const addMetadata = (params, metadata) => {
@@ -24,6 +9,11 @@ const addMetadata = (params, metadata) => {
     params.append(`metadata[${key}]`, value);
     params.append(`payment_intent_data[metadata][${key}]`, value);
   });
+};
+const createOrderReference = () => {
+  const date = new Date().toISOString().slice(2, 10).replaceAll('-', '');
+  const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+  return `DLK-${date}-${suffix}`;
 };
 
 export default async req => {
@@ -40,7 +30,7 @@ export default async req => {
   }
 
   const name = clean(body.customer?.name, 100);
-  const email = clean(body.customer?.email, 200);
+  const email = clean(body.customer?.email, 200).toLowerCase();
   const phone = clean(body.customer?.phone, 40);
   const fulfilment = body.fulfilment === 'delivery' ? 'delivery' : body.fulfilment === 'collection' ? 'collection' : '';
   const address = clean(body.address, 300);
@@ -65,48 +55,84 @@ export default async req => {
     return Response.json({ error: 'Your order contains an invalid item. Please return to the menu and try again.' }, { status: 400 });
   }
 
+  const orderItems = validatedItems.map(item => ({
+    id: item.id,
+    name: catalog[item.id].name,
+    quantity: item.quantity,
+    unitAmount: catalog[item.id].unitAmount,
+    lineTotal: catalog[item.id].unitAmount * item.quantity,
+  }));
+  const amountTotal = orderItems.reduce((total, item) => total + item.lineTotal, 0);
+  const orderReference = createOrderReference();
+
+  try {
+    await db.insert(orders).values({
+      reference: orderReference,
+      customerName: name,
+      customerEmail: email,
+      customerPhone: phone,
+      fulfilment,
+      deliveryAddress: fulfilment === 'delivery' ? address : null,
+      postcode: fulfilment === 'delivery' ? postcode : null,
+      notes: notes || null,
+      amountTotal,
+      items: orderItems,
+    });
+  } catch (error) {
+    console.error('Order creation failed', error instanceof Error ? error.name : 'UnknownError');
+    return Response.json({ error: 'Your order could not be prepared. Please try again.' }, { status: 500 });
+  }
+
   const params = new URLSearchParams();
   params.set('mode', 'payment');
   params.set('customer_email', email);
+  params.set('client_reference_id', orderReference);
   params.set('success_url', `${new URL(req.url).origin}/success.html?session_id={CHECKOUT_SESSION_ID}`);
   params.set('cancel_url', `${new URL(req.url).origin}/cancelled.html`);
   params.set('submit_type', 'pay');
 
-  validatedItems.forEach((item, index) => {
-    const product = catalog[item.id];
+  orderItems.forEach((item, index) => {
     params.set(`line_items[${index}][price_data][currency]`, 'gbp');
-    params.set(`line_items[${index}][price_data][unit_amount]`, String(product.unitAmount));
-    params.set(`line_items[${index}][price_data][product_data][name]`, product.name);
+    params.set(`line_items[${index}][price_data][unit_amount]`, String(item.unitAmount));
+    params.set(`line_items[${index}][price_data][product_data][name]`, item.name);
     params.set(`line_items[${index}][quantity]`, String(item.quantity));
   });
 
-  const orderSummary = validatedItems.map(item => `${item.quantity}x ${catalog[item.id].name}`).join(', ').slice(0, 500);
   addMetadata(params, {
+    order_reference: orderReference,
     customer_name: name,
     customer_phone: phone,
     fulfilment,
-    delivery_address: fulfilment === 'delivery' ? address : 'Collection',
-    postcode: fulfilment === 'delivery' ? postcode : 'N/A',
-    order_details: orderSummary,
-    order_notes: notes || 'None',
   });
 
-  const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${stripeSecretKey}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params,
-  });
-  const session = await stripeResponse.json();
+  try {
+    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${stripeSecretKey}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params,
+    });
+    const session = await stripeResponse.json();
 
-  if (!stripeResponse.ok) {
-    console.error('Stripe Checkout Session error', session.error?.type || stripeResponse.status);
+    if (!stripeResponse.ok) {
+      console.error('Stripe Checkout Session error', session.error?.type || stripeResponse.status);
+      await db.delete(orders).where(eq(orders.reference, orderReference));
+      return Response.json({ error: 'Secure payment could not be opened. Please try again.' }, { status: 502 });
+    }
+
+    await db.update(orders).set({
+      stripeSessionId: session.id,
+      updatedAt: new Date(),
+    }).where(eq(orders.reference, orderReference));
+
+    return Response.json({ url: session.url });
+  } catch (error) {
+    console.error('Stripe Checkout request failed', error instanceof Error ? error.name : 'UnknownError');
+    await db.delete(orders).where(eq(orders.reference, orderReference));
     return Response.json({ error: 'Secure payment could not be opened. Please try again.' }, { status: 502 });
   }
-
-  return Response.json({ url: session.url });
 };
 
 export const config = {

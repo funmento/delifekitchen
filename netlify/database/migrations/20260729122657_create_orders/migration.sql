@@ -1,0 +1,22 @@
+CREATE TABLE "orders" (
+	"id" serial PRIMARY KEY,
+	"reference" text NOT NULL UNIQUE,
+	"stripe_session_id" text UNIQUE,
+	"stripe_payment_intent_id" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"customer_name" text NOT NULL,
+	"customer_email" text NOT NULL,
+	"customer_phone" text NOT NULL,
+	"fulfilment" text NOT NULL,
+	"delivery_address" text,
+	"postcode" text,
+	"notes" text,
+	"currency" text DEFAULT 'gbp' NOT NULL,
+	"amount_total" integer NOT NULL,
+	"items" jsonb NOT NULL,
+	"paid_at" timestamp with time zone,
+	"merchant_email_sent_at" timestamp with time zone,
+	"customer_email_sent_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
