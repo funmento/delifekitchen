@@ -6,6 +6,15 @@ export type OrderItem = {
   quantity: number;
   unitAmount: number;
   lineTotal: number;
+  customizations: Array<{
+    groupId: string;
+    groupName: string;
+    selections: Array<{
+      id: string;
+      name: string;
+      priceAdjustment: number;
+    }>;
+  }>;
 };
 
 export const orders = pgTable("orders", {

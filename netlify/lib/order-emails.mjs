@@ -7,9 +7,15 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character =>
   '"': '&quot;',
 })[character]);
 const textValue = value => value || 'None';
+const customizationText = item => (item.customizations || [])
+  .map(group => `${group.groupName}: ${group.selections.map(option => option.name).join(', ')}`)
+  .join('; ');
+const customizationHtml = item => (item.customizations || [])
+  .map(group => `<div style="color:#666;font-size:12px;margin-top:3px;"><strong>${escapeHtml(group.groupName)}:</strong> ${escapeHtml(group.selections.map(option => option.name).join(', '))}</div>`)
+  .join('');
 
 const orderDetailsText = order => {
-  const lines = order.items.map(item => `- ${item.quantity} × ${item.name}: ${currency.format(item.lineTotal / 100)}`);
+  const lines = order.items.map(item => `- ${item.quantity} × ${item.name}${customizationText(item) ? ` (${customizationText(item)})` : ''}: ${currency.format(item.lineTotal / 100)}`);
   return [
     `Order reference: ${order.reference}`,
     `Customer: ${order.customerName}`,
@@ -29,7 +35,7 @@ const orderDetailsText = order => {
 const orderDetailsHtml = order => {
   const rows = order.items.map(item => `
     <tr>
-      <td style="padding:8px 0;border-bottom:1px solid #e4ded2;">${item.quantity} × ${escapeHtml(item.name)}</td>
+      <td style="padding:8px 0;border-bottom:1px solid #e4ded2;">${item.quantity} × ${escapeHtml(item.name)}${customizationHtml(item)}</td>
       <td style="padding:8px 0;border-bottom:1px solid #e4ded2;text-align:right;">${currency.format(item.lineTotal / 100)}</td>
     </tr>`).join('');
   const destination = order.fulfilment === 'delivery'
