@@ -51,7 +51,7 @@ if (product && details && addButton) {
     form.append(fieldset);
   });
 
-  details.insertBefore(form, addButton);
+  if (product.optionGroups.length) details.insertBefore(form, addButton);
   addButton.removeAttribute('href');
   addButton.setAttribute('role', 'button');
   addButton.setAttribute('tabindex', '0');

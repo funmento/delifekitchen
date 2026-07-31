@@ -20,111 +20,130 @@ const multiGroup = (id, name, options, { required = false, minSelections = requi
 
 const choice = (id, name, priceAdjustment = 0) => ({ id, name, priceAdjustment });
 
-const portionGroup = (largePrice = 400) => singleGroup('portion-size', 'Portion Size', [
-  choice('regular', 'Regular'),
-  choice('large', 'Large', largePrice),
+const soupPreparationGroup = singleGroup('choose-preparation', 'Choose your preparation', [
+  choice('with-pounded-yam', 'With Pounded Yam'),
+  choice('with-oat-meal', 'With Oat Meal'),
+  choice('extra-pounded-yam', 'Extra Pounded Yam', 499),
+  choice('extra-oat-meal', 'Extra Oat Meal', 499),
+  choice('with-garri', 'With Garri'),
+  choice('extra-garri', 'Extra Garri', 499),
+  choice('cassava-fufu', 'Cassava Fufu'),
+  choice('extra-cassava-fufu', 'Extra Cassava Fufu', 499),
 ]);
 
-const heatGroup = singleGroup('heat-level', 'Heat Level', [
-  choice('mild', 'Mild'),
-  choice('medium', 'Medium'),
-  choice('hot', 'Hot'),
-]);
-
-const swallowGroups = [
-  singleGroup('swallow-type', 'Swallow Type', [
-    choice('eba', 'Eba'),
-    choice('pounded-yam', 'Pounded Yam'),
-    choice('amala', 'Amala'),
-    choice('semovita', 'Semovita'),
-  ]),
-  portionGroup(400),
-  multiGroup('extras', 'Extras', [
-    choice('extra-soup', 'Extra Soup', 450),
-    choice('extra-meat', 'Extra Meat', 350),
-    choice('extra-fish', 'Extra Fish', 450),
-  ], { maxSelections: 3 }),
+const fullMealAddOns = [
+  choice('stewed-turkey', 'Stewed Turkey', 799),
+  choice('stewed-beef', 'Stewed Beef', 599),
+  choice('stewed-hake-fish', 'Stewed Hake Fish', 599),
+  choice('stewed-mackerel-fish', 'Stewed Mackerel Fish', 599),
+  choice('fried-plantain', 'Fried Plantain', 500),
+  choice('stewed-chicken', 'Stewed Chicken', 599),
+  choice('moi-moi', 'Moi Moi', 399),
+  choice('grilled-chicken', 'Grilled Chicken', 599),
 ];
 
 export const catalog = {
   'fried-plantain': {
     name: 'Fried Plantain',
-    unitAmount: 1000,
-    optionGroups: [
-      portionGroup(400),
-      multiGroup('extras', 'Extras', [choice('pepper-sauce', 'Pepper Sauce', 150), choice('moi-moi', 'Moi Moi', 350)], { maxSelections: 2 }),
-    ],
+    unitAmount: 599,
+    optionGroups: [],
   },
   'delife-yamarita': {
     name: 'DeLife Yamarita',
-    unitAmount: 1200,
-    optionGroups: [
-      portionGroup(400),
-      multiGroup('dips', 'Choose Your Dips', [choice('pepper-sauce', 'Pepper Sauce', 150), choice('garlic-mayo', 'Garlic Mayo', 100)], { maxSelections: 2 }),
-    ],
+    unitAmount: 1199,
+    optionGroups: [],
   },
-  'egusi-soup': { name: 'Egusi Soup', unitAmount: 1500, optionGroups: swallowGroups },
+  'egusi-soup': {
+    name: 'Egusi Soup with Choice of Pounded Yam, Oat Meal, Garri or Cassava Fufu',
+    unitAmount: 1799,
+    optionGroups: [soupPreparationGroup],
+  },
   'fish-peppersoup': {
-    name: 'Fish Peppersoup',
-    unitAmount: 700,
-    optionGroups: [portionGroup(300), heatGroup, multiGroup('extras', 'Extras', [choice('extra-fish', 'Extra Fish', 400), choice('extra-broth', 'Extra Broth', 250)], { maxSelections: 2 })],
+    name: 'Fish Pepper Soup',
+    unitAmount: 1799,
+    optionGroups: [singleGroup('choose-add-ons', 'Choose your add-ons', [choice('white-yam', 'White Yam', 599), choice('white-rice', 'White Rice', 699)], { required: false })],
   },
   'fried-rice': {
-    name: 'Fried Rice',
-    unitAmount: 1800,
-    optionGroups: [portionGroup(500), heatGroup, multiGroup('extras', 'Extras', [choice('fried-plantain', 'Fried Plantain', 300), choice('moi-moi', 'Moi Moi', 350), choice('extra-chicken', 'Extra Chicken', 400)], { maxSelections: 2 })],
+    name: 'Fried or Vegetable Rice',
+    unitAmount: 1199,
+    optionGroups: [singleGroup('choose-serving', 'Choose your serving', [
+      choice('grilled-chicken', 'Grilled Chicken', 699),
+      choice('grilled-hake-fish', 'Grilled Hake Fish', 799),
+      choice('grilled-mackerel-fish', 'Grilled Mackerel Fish', 799),
+      choice('grilled-turkey', 'Grilled Turkey', 799),
+      choice('moi-moi', 'Moi Moi', 699),
+    ], { required: false })],
   },
   'jollof-rice-chicken': {
-    name: 'Jollof Rice & Chicken',
-    unitAmount: 2000,
-    optionGroups: [portionGroup(500), heatGroup, multiGroup('extras', 'Extras', [choice('fried-plantain', 'Fried Plantain', 300), choice('moi-moi', 'Moi Moi', 350), choice('extra-chicken', 'Extra Chicken', 400)], { maxSelections: 2 })],
+    name: 'Jollof Rice with Chicken',
+    unitAmount: 1299,
+    optionGroups: [multiGroup('choose-add-ons', 'Choose your add-ons', fullMealAddOns)],
   },
   'jollof-rice': {
     name: 'Jollof Rice',
-    unitAmount: 1200,
-    optionGroups: [portionGroup(450), heatGroup, multiGroup('add-protein', 'Add Protein', [choice('chicken', 'Chicken', 400), choice('turkey', 'Turkey', 450), choice('fish', 'Fish', 500)], { maxSelections: 2 })],
+    unitAmount: 999,
+    optionGroups: [singleGroup('choose-add-ons', 'Choose your add-ons', [
+      choice('stewed-chicken', 'Stewed Chicken', 599),
+      choice('stewed-beef', 'Stewed Beef', 799),
+      choice('stewed-mackerel-fish', 'Stewed Mackerel Fish', 599),
+      choice('stewed-hake-fish', 'Stewed Hake Fish', 599),
+      choice('stewed-turkey', 'Stewed Turkey', 799),
+      choice('fried-plantain', 'Fried Plantain', 500),
+      choice('moi-moi', 'Moi Moi', 359),
+    ], { required: false })],
   },
   'meat-pie': {
     name: 'Meat Pie',
-    unitAmount: 1500,
-    optionGroups: [singleGroup('pack-size', 'Pack Size', [choice('single', 'Single'), choice('two-pack', 'Two Pack', 1000)]), multiGroup('extras', 'Extras', [choice('pepper-sauce', 'Pepper Sauce', 150)], { maxSelections: 1 })],
+    unitAmount: 299,
+    optionGroups: [],
   },
   'moi-moi': {
     name: 'Moi Moi',
-    unitAmount: 700,
-    optionGroups: [portionGroup(300), multiGroup('extras', 'Extras', [choice('egg', 'Boiled Egg', 150), choice('fish', 'Fish', 250), choice('pepper-sauce', 'Pepper Sauce', 150)], { maxSelections: 2 })],
+    unitAmount: 699,
+    optionGroups: [],
   },
   nkwobi: {
-    name: 'Nkwobi',
-    unitAmount: 1500,
-    optionGroups: [portionGroup(500), heatGroup, multiGroup('extras', 'Extras', [choice('extra-meat', 'Extra Meat', 450), choice('onions', 'Extra Onions', 50)], { maxSelections: 2 })],
+    name: 'Abacha 102 with Grilled Fish and Nkwobi',
+    unitAmount: 1799,
+    optionGroups: [],
   },
-  'nsala-soup': { name: 'Nsala Soup', unitAmount: 1300, optionGroups: swallowGroups },
-  'okra-soup': { name: 'Okra Soup', unitAmount: 1700, optionGroups: swallowGroups },
+  'nsala-soup': {
+    name: 'Nsala Soup with Choice of Pounded Yam Oat Meal Garri or Cassava Fufu',
+    unitAmount: 1799,
+    optionGroups: [soupPreparationGroup],
+  },
+  'okra-soup': {
+    name: 'Okro Soup with Choice of Pounded Yam, Oat Meal, Garri or Cassava Fufu',
+    unitAmount: 1799,
+    optionGroups: [soupPreparationGroup],
+  },
   'stewed-chicken': {
     name: 'Stewed Chicken',
-    unitAmount: 1400,
-    optionGroups: [singleGroup('portion-size', 'Portion Size', [choice('two-pieces', 'Two Pieces'), choice('three-pieces', 'Three Pieces', 400)]), heatGroup, multiGroup('extras', 'Extras', [choice('extra-stew', 'Extra Stew', 200), choice('fried-plantain', 'Fried Plantain', 300)], { maxSelections: 2 })],
+    unitAmount: 799,
+    optionGroups: [],
   },
   'stewed-turkey': {
     name: 'Stewed Turkey',
-    unitAmount: 1300,
-    optionGroups: [singleGroup('portion-size', 'Portion Size', [choice('two-pieces', 'Two Pieces'), choice('three-pieces', 'Three Pieces', 400)]), heatGroup, multiGroup('extras', 'Extras', [choice('extra-stew', 'Extra Stew', 200), choice('fried-plantain', 'Fried Plantain', 300)], { maxSelections: 2 })],
+    unitAmount: 799,
+    optionGroups: [],
   },
   'stewed-turkey-2': {
     name: 'Stewed Turkey',
-    unitAmount: 1300,
-    optionGroups: [singleGroup('portion-size', 'Portion Size', [choice('two-pieces', 'Two Pieces'), choice('three-pieces', 'Three Pieces', 400)]), heatGroup, multiGroup('extras', 'Extras', [choice('extra-stew', 'Extra Stew', 200), choice('fried-plantain', 'Fried Plantain', 300)], { maxSelections: 2 })],
+    unitAmount: 799,
+    optionGroups: [],
   },
   'tilapia-fish': {
-    name: 'Tilapia Fish',
-    unitAmount: 3300,
-    optionGroups: [singleGroup('side', 'Choose Your Side', [choice('fried-plantain', 'Fried Plantain'), choice('fried-yam', 'Fried Yam'), choice('potato-fries', 'Potato Fries')]), heatGroup, multiGroup('extras', 'Extras', [choice('extra-side', 'Extra Side', 350), choice('pepper-sauce', 'Pepper Sauce', 150)], { maxSelections: 2 })],
+    name: 'Grilled Medium Tilapia Fish Served with Fried Yam, Fried Plantain or Potato Fries',
+    unitAmount: 2999,
+    optionGroups: [singleGroup('choose-serving', 'Choose your serving', [choice('fried-yam', 'Fried Yam'), choice('plantain', 'Plantain'), choice('potato-fries', 'Potato Fries')])],
   },
   'yam-tomato-stew': {
-    name: 'Yam & Tomato Stew',
-    unitAmount: 3300,
-    optionGroups: [portionGroup(700), heatGroup, multiGroup('add-protein', 'Add Protein', [choice('chicken', 'Chicken', 400), choice('turkey', 'Turkey', 450), choice('fish', 'Fish', 500)], { maxSelections: 2 })],
+    name: 'Yam with Tomato Stew',
+    unitAmount: 1199,
+    optionGroups: [
+      multiGroup('choose-add-ons', 'Choose your add-ons', fullMealAddOns),
+      singleGroup('choose-preparation', 'Choose your preparation', [choice('fried-yam', 'Fried Yam'), choice('boiled-yam', 'Boiled Yam')], { required: false }),
+    ],
   },
 };
 

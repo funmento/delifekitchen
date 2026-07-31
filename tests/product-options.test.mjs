@@ -13,9 +13,8 @@ const memoryStorage = () => {
   };
 };
 
-test('every product has reusable customization groups', () => {
+test('every customization group has valid selection rules', () => {
   Object.values(catalog).forEach(product => {
-    assert.ok(product.optionGroups.length > 0, `${product.name} needs option groups`);
     product.optionGroups.forEach(group => {
       assert.ok(['single', 'multi'].includes(group.selectionType));
       assert.ok(group.maxSelections >= group.minSelections);
@@ -24,48 +23,60 @@ test('every product has reusable customization groups', () => {
   });
 });
 
-test('swallow products include the required types, sizes, and extras', () => {
+test('catalog names and prices match the Uber Eats menu', () => {
+  assert.equal(catalog['fried-plantain'].unitAmount, 599);
+  assert.equal(catalog['fish-peppersoup'].name, 'Fish Pepper Soup');
+  assert.equal(catalog['fried-rice'].name, 'Fried or Vegetable Rice');
+  assert.equal(catalog.nkwobi.name, 'Abacha 102 with Grilled Fish and Nkwobi');
+  assert.equal(catalog['tilapia-fish'].unitAmount, 2999);
+  assert.equal(catalog['yam-tomato-stew'].unitAmount, 1199);
+});
+
+test('soup products use the required Uber Eats preparation choices', () => {
   ['egusi-soup', 'nsala-soup', 'okra-soup'].forEach(productId => {
     const groups = catalog[productId].optionGroups;
-    assert.deepEqual(groups[0].options.map(option => option.name), ['Eba', 'Pounded Yam', 'Amala', 'Semovita']);
+    assert.deepEqual(groups[0].options.map(option => option.name), [
+      'With Pounded Yam',
+      'With Oat Meal',
+      'Extra Pounded Yam',
+      'Extra Oat Meal',
+      'With Garri',
+      'Extra Garri',
+      'Cassava Fufu',
+      'Extra Cassava Fufu',
+    ]);
     assert.equal(groups[0].required, true);
-    assert.equal(groups[1].name, 'Portion Size');
-    assert.equal(groups[1].required, true);
-    assert.deepEqual(groups[2].options.map(option => option.name), ['Extra Soup', 'Extra Meat', 'Extra Fish']);
+    assert.equal(groups[0].minSelections, 1);
+    assert.equal(groups[0].maxSelections, 1);
+    assert.equal(groups[0].options.find(option => option.id === 'extra-garri').priceAdjustment, 499);
   });
 });
 
 test('required selections and multi-select limits are enforced', () => {
   assert.equal(resolveCustomizations('egusi-soup', []).valid, false);
+  assert.equal(resolveCustomizations('tilapia-fish', []).valid, false);
 
-  const tooManyExtras = resolveCustomizations('fried-rice', [
-    { groupId: 'portion-size', selectionIds: ['regular'] },
-    { groupId: 'heat-level', selectionIds: ['medium'] },
-    { groupId: 'extras', selectionIds: ['fried-plantain', 'moi-moi', 'extra-chicken'] },
+  const tooManyExtras = resolveCustomizations('jollof-rice', [
+    { groupId: 'choose-add-ons', selectionIds: ['stewed-chicken', 'fried-plantain'] },
   ]);
   assert.equal(tooManyExtras.valid, false);
 });
 
 test('option pricing is included in unit and line totals', () => {
   const resolved = resolveCustomizations('egusi-soup', [
-    { groupId: 'swallow-type', selectionIds: ['pounded-yam'] },
-    { groupId: 'portion-size', selectionIds: ['large'] },
-    { groupId: 'extras', selectionIds: ['extra-soup', 'extra-meat'] },
+    { groupId: 'choose-preparation', selectionIds: ['extra-pounded-yam'] },
   ]);
 
   assert.equal(resolved.valid, true);
-  assert.equal(resolved.optionAmount, 1200);
-  assert.equal(resolved.unitAmount, 2700);
-  assert.match(customizationSummary(resolved.selections), /Pounded Yam/);
-  assert.match(customizationSummary(resolved.selections), /Extra Soup, Extra Meat/);
+  assert.equal(resolved.optionAmount, 499);
+  assert.equal(resolved.unitAmount, 2298);
+  assert.match(customizationSummary(resolved.selections), /Extra Pounded Yam/);
 });
 
 test('customized cart lines persist and consolidate after refresh', () => {
   const storage = memoryStorage();
   const customizations = [
-    { groupId: 'side', selectionIds: ['fried-yam'] },
-    { groupId: 'heat-level', selectionIds: ['hot'] },
-    { groupId: 'extras', selectionIds: ['pepper-sauce'] },
+    { groupId: 'choose-serving', selectionIds: ['fried-yam'] },
   ];
   const resolved = resolveCustomizations('tilapia-fish', customizations);
   const signature = customizationSignature('tilapia-fish', resolved.selections);
@@ -78,7 +89,7 @@ test('customized cart lines persist and consolidate after refresh', () => {
   assert.equal(restored.length, 1);
   assert.equal(restored[0].quantity, 2);
   assert.deepEqual(restored[0].customizations, customizations);
-  assert.equal(restored[0].unitAmount, 3450);
+  assert.equal(restored[0].unitAmount, 2999);
 });
 
 test('order confirmations contain selected customizations', () => {
@@ -91,20 +102,20 @@ test('order confirmations contain selected customizations', () => {
     deliveryAddress: null,
     postcode: null,
     notes: null,
-    amountTotal: 2700,
+    amountTotal: 2298,
     items: [{
       id: 'egusi-soup',
-      name: 'Egusi Soup',
+      name: 'Egusi Soup with Choice of Pounded Yam, Oat Meal, Garri or Cassava Fufu',
       quantity: 1,
-      unitAmount: 2700,
-      lineTotal: 2700,
+      unitAmount: 2298,
+      lineTotal: 2298,
       customizations: [
-        { groupId: 'swallow-type', groupName: 'Swallow Type', selections: [{ id: 'pounded-yam', name: 'Pounded Yam', priceAdjustment: 0 }] },
+        { groupId: 'choose-preparation', groupName: 'Choose your preparation', selections: [{ id: 'extra-pounded-yam', name: 'Extra Pounded Yam', priceAdjustment: 499 }] },
       ],
     }],
   });
 
-  assert.match(email.text, /Swallow Type: Pounded Yam/);
-  assert.match(email.html, /Swallow Type/);
-  assert.match(email.html, /Pounded Yam/);
+  assert.match(email.text, /Choose your preparation: Extra Pounded Yam/);
+  assert.match(email.html, /Choose your preparation/);
+  assert.match(email.html, /Extra Pounded Yam/);
 });
