@@ -1,22 +1,5 @@
-const catalog = {
-  'fried-plantain': { name: 'Fried Plantain', price: 10 },
-  'delife-yamarita': { name: 'DeLife Yamarita', price: 12 },
-  'egusi-soup': { name: 'Egusi Soup', price: 15 },
-  'fish-peppersoup': { name: 'Fish Peppersoup', price: 7 },
-  'fried-rice': { name: 'Fried Rice', price: 18 },
-  'jollof-rice-chicken': { name: 'Jollof Rice & Chicken', price: 20 },
-  'jollof-rice': { name: 'Jollof Rice', price: 12 },
-  'meat-pie': { name: 'Meat Pie', price: 15 },
-  'moi-moi': { name: 'Moi Moi', price: 7 },
-  nkwobi: { name: 'Nkwobi', price: 15 },
-  'nsala-soup': { name: 'Nsala Soup', price: 13 },
-  'okra-soup': { name: 'Okra Soup', price: 17 },
-  'stewed-chicken': { name: 'Stewed Chicken', price: 14 },
-  'stewed-turkey': { name: 'Stewed Turkey', price: 13 },
-  'stewed-turkey-2': { name: 'Stewed Turkey', price: 13 },
-  'tilapia-fish': { name: 'Tilapia Fish', price: 33 },
-  'yam-tomato-stew': { name: 'Yam & Tomato Stew', price: 33 },
-};
+import { catalog, customizationSignature, resolveCustomizations } from './catalog.mjs';
+import { readCart, writeCart } from './cart.mjs';
 
 const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 const form = document.querySelector('#checkout-form');
@@ -31,24 +14,28 @@ const postcodeInput = form.elements.postcode;
 const collectionTimeInput = form.elements.collectionTime;
 
 const requestedItem = new URLSearchParams(window.location.search).get('item');
-let storedOrder = [];
-try {
-  storedOrder = JSON.parse(sessionStorage.getItem('delifeOrder') || '[]');
-  if (!Array.isArray(storedOrder)) storedOrder = [];
-} catch {
-  sessionStorage.removeItem('delifeOrder');
-}
-let order = storedOrder
-  .filter(item => catalog[item.id] && Number.isInteger(item.quantity) && item.quantity > 0)
-  .map(item => ({ id: item.id, quantity: Math.min(item.quantity, 20) }));
-
 if (requestedItem && catalog[requestedItem]) {
-  const existingItem = order.find(item => item.id === requestedItem);
-  if (existingItem) existingItem.quantity = Math.min(existingItem.quantity + 1, 20);
-  else order.push({ id: requestedItem, quantity: 1 });
-  sessionStorage.setItem('delifeOrder', JSON.stringify(order));
-  window.history.replaceState({}, '', 'checkout.html');
+  window.location.replace(`products/${requestedItem}.html`);
 }
+
+const storedOrder = readCart(localStorage);
+let order = storedOrder.map(item => {
+  const id = typeof item?.id === 'string' ? item.id : '';
+  const quantity = Number(item?.quantity);
+  const customizations = Array.isArray(item?.customizations) ? item.customizations : [];
+  const resolved = resolveCustomizations(id, customizations);
+  if (!resolved.valid || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) return null;
+  return {
+    id,
+    quantity,
+    customizations,
+    signature: customizationSignature(id, resolved.selections),
+    unitAmount: resolved.unitAmount,
+    resolved,
+  };
+}).filter(Boolean);
+
+writeCart(order.map(({ resolved, ...item }) => item), localStorage);
 
 const renderOrder = () => {
   if (!order.length) {
@@ -60,12 +47,33 @@ const renderOrder = () => {
 
   itemContainer.innerHTML = order.map(item => {
     const product = catalog[item.id];
-    return `<div class="order-item"><span class="order-quantity">${item.quantity}×</span><span>${product.name}</span><strong>${currency.format(product.price * item.quantity)}</strong></div>`;
+    const optionLines = item.resolved.selections.map(group => `
+      <li><span>${group.groupName}</span><b>${group.selections.map(option => option.name).join(', ')}</b></li>`).join('');
+    return `
+      <article class="order-item" data-signature="${item.signature}">
+        <span class="order-quantity">${item.quantity}×</span>
+        <div class="order-item-details">
+          <strong>${product.name}</strong>
+          <ul>${optionLines}</ul>
+          <button class="order-remove" type="button">Remove</button>
+        </div>
+        <strong class="order-line-total">${currency.format((item.resolved.unitAmount * item.quantity) / 100)}</strong>
+      </article>`;
   }).join('');
 
-  const total = order.reduce((sum, item) => sum + catalog[item.id].price * item.quantity, 0);
-  totalLabel.textContent = currency.format(total);
+  const total = order.reduce((sum, item) => sum + item.resolved.unitAmount * item.quantity, 0);
+  totalLabel.textContent = currency.format(total / 100);
+  submitButton.disabled = false;
 };
+
+itemContainer.addEventListener('click', event => {
+  const removeButton = event.target.closest('.order-remove');
+  if (!removeButton) return;
+  const itemElement = removeButton.closest('.order-item');
+  order = order.filter(item => item.signature !== itemElement.dataset.signature);
+  writeCart(order.map(({ resolved, ...item }) => item), localStorage);
+  renderOrder();
+});
 
 const setFulfilment = value => {
   const isDelivery = value === 'delivery';
@@ -100,7 +108,7 @@ form.addEventListener('submit', async event => {
     postcode: formData.get('postcode'),
     collectionTime: formData.get('collectionTime'),
     notes: formData.get('notes'),
-    items: order,
+    items: order.map(item => ({ id: item.id, quantity: item.quantity, customizations: item.customizations })),
   };
 
   try {

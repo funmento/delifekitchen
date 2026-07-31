@@ -26,4 +26,5 @@ loadOrderReference().catch(error => {
   referenceValue.textContent = error.message;
 });
 
+localStorage.removeItem('delifeOrder');
 sessionStorage.removeItem('delifeOrder');

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { orders } from '../../db/schema.js';
-import { catalog } from '../lib/catalog.mjs';
+import { catalog, customizationSignature, customizationSummary, resolveCustomizations } from '../lib/catalog.mjs';
 
 const clean = (value, maxLength) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 const addMetadata = (params, metadata) => {
@@ -53,19 +53,30 @@ export default async req => {
     return Response.json({ error: 'Please provide your preferred collection time.' }, { status: 400 });
   }
 
-  const validatedItems = items.map(item => ({
-    id: clean(item?.id, 80),
-    quantity: Number(item?.quantity),
-  })).filter(item => catalog[item.id] && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20);
+  const validatedItems = items.map(item => {
+    const id = clean(item?.id, 80);
+    const quantity = Number(item?.quantity);
+    const customizations = Array.isArray(item?.customizations)
+      ? item.customizations.slice(0, 20).map(group => ({
+        groupId: clean(group?.groupId, 80),
+        selectionIds: Array.isArray(group?.selectionIds) ? group.selectionIds.slice(0, 20).map(selection => clean(selection, 80)) : [],
+      }))
+      : [];
+    const resolved = resolveCustomizations(id, customizations);
+    return { id, quantity, customizations, resolved };
+  }).filter(item => catalog[item.id] && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20 && item.resolved.valid);
 
   if (!validatedItems.length || validatedItems.length !== items.length) {
     return Response.json({ error: 'Your order contains an invalid item. Please return to the menu and try again.' }, { status: 400 });
   }
 
-  const consolidatedItems = [...validatedItems.reduce((itemsById, item) => {
-    itemsById.set(item.id, (itemsById.get(item.id) || 0) + item.quantity);
-    return itemsById;
-  }, new Map()).entries()].map(([id, quantity]) => ({ id, quantity }));
+  const consolidatedItems = [...validatedItems.reduce((itemsBySignature, item) => {
+    const signature = customizationSignature(item.id, item.resolved.selections);
+    const existing = itemsBySignature.get(signature);
+    if (existing) existing.quantity += item.quantity;
+    else itemsBySignature.set(signature, { ...item, signature });
+    return itemsBySignature;
+  }, new Map()).values()];
 
   if (consolidatedItems.some(item => item.quantity > 20)) {
     return Response.json({ error: 'An item quantity is too high. Please reduce it and try again.' }, { status: 400 });
@@ -75,8 +86,9 @@ export default async req => {
     id: item.id,
     name: catalog[item.id].name,
     quantity: item.quantity,
-    unitAmount: catalog[item.id].unitAmount,
-    lineTotal: catalog[item.id].unitAmount * item.quantity,
+    unitAmount: item.resolved.unitAmount,
+    lineTotal: item.resolved.unitAmount * item.quantity,
+    customizations: item.resolved.selections,
   }));
   const amountTotal = orderItems.reduce((total, item) => total + item.lineTotal, 0);
   const orderReference = createOrderReference();
@@ -122,9 +134,11 @@ export default async req => {
   }
 
   orderItems.forEach((item, index) => {
+    const summary = customizationSummary(item.customizations);
     params.set(`line_items[${index}][price_data][currency]`, 'gbp');
     params.set(`line_items[${index}][price_data][unit_amount]`, String(item.unitAmount));
     params.set(`line_items[${index}][price_data][product_data][name]`, item.name);
+    if (summary) params.set(`line_items[${index}][price_data][product_data][description]`, summary.slice(0, 500));
     params.set(`line_items[${index}][quantity]`, String(item.quantity));
   });
 
@@ -140,12 +154,8 @@ export default async req => {
     special_instructions_allergies: notes || 'None provided',
     total_price: `${(amountTotal / 100).toFixed(2)} GBP`,
     total_price_pence: String(amountTotal),
+    order_summary: orderItems.map(item => `${item.quantity}x ${item.name} (${customizationSummary(item.customizations)})`).join('; ').slice(0, 500),
   };
-
-  orderItems.forEach((item, index) => {
-    metadata[`product_${index + 1}_name`] = item.name;
-    metadata[`product_${index + 1}_quantity`] = String(item.quantity);
-  });
 
   const missingFields = missingMetadataFields(metadata);
   if (missingFields.length || Object.keys(metadata).length > 50) {
