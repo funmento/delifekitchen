@@ -25,8 +25,10 @@ const totalLabel = document.querySelector('#order-total');
 const submitButton = document.querySelector('#checkout-submit');
 const errorBox = document.querySelector('#checkout-error');
 const deliveryFields = document.querySelector('#delivery-fields');
+const collectionFields = document.querySelector('#collection-fields');
 const addressInput = form.elements.address;
 const postcodeInput = form.elements.postcode;
+const collectionTimeInput = form.elements.collectionTime;
 
 const requestedItem = new URLSearchParams(window.location.search).get('item');
 let storedOrder = [];
@@ -68,8 +70,10 @@ const renderOrder = () => {
 const setFulfilment = value => {
   const isDelivery = value === 'delivery';
   deliveryFields.hidden = !isDelivery;
+  collectionFields.hidden = isDelivery;
   addressInput.required = isDelivery;
   postcodeInput.required = isDelivery;
+  collectionTimeInput.required = !isDelivery;
 };
 
 form.elements.fulfilment.forEach(input => input.addEventListener('change', event => setFulfilment(event.target.value)));
@@ -94,6 +98,7 @@ form.addEventListener('submit', async event => {
     fulfilment: formData.get('fulfilment'),
     address: formData.get('address'),
     postcode: formData.get('postcode'),
+    collectionTime: formData.get('collectionTime'),
     notes: formData.get('notes'),
     items: order,
   };

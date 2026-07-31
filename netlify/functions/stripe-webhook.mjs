@@ -44,6 +44,26 @@ export default async req => {
   const session = event.data?.object;
   if (!session?.id || session.payment_status !== 'paid') return Response.json({ received: true });
 
+  const requiredMetadataFields = [
+    'order_reference',
+    'customer_name',
+    'customer_phone',
+    'customer_email',
+    'fulfilment',
+    'delivery_address',
+    'postcode',
+    'preferred_collection_time',
+    'special_instructions_allergies',
+    'total_price',
+  ];
+  const missingMetadataFields = requiredMetadataFields.filter(field => !session.metadata?.[field]);
+  if (missingMetadataFields.length) {
+    console.error('Paid Stripe session metadata missing', {
+      sessionId: session.id,
+      missingFields: missingMetadataFields,
+    });
+  }
+
   const reference = session.metadata?.order_reference || session.client_reference_id;
   if (!reference) return new Response('Order reference missing', { status: 400 });
 
