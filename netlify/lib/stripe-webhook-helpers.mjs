@@ -55,7 +55,7 @@ export const paymentFromStripeEvent = event => {
 };
 
 export const paidOrderChanges = (order, payment) => ({
-  status: 'paid',
+  status: order.status && order.status !== 'pending' ? order.status : 'paid',
   paidAt: order.paidAt || payment.paidAt,
   updatedAt: new Date(),
   ...(payment.sessionId ? { stripeSessionId: payment.sessionId } : {}),

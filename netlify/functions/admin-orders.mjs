@@ -1,10 +1,12 @@
-import { and, count, desc, eq, gte, ilike, lte, or } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, inArray, lte, or } from 'drizzle-orm';
 import { verifyRequestOrigin } from '@netlify/identity';
-import { orders } from '../../db/schema.js';
+import { orderEmailDeliveries, orders } from '../../db/schema.js';
 import { requireAdmin, json } from '../lib/admin-auth.mjs';
+import { sendCustomerStatusNotification } from '../lib/order-notifications.mjs';
 
 const PAGE_SIZE = 20;
 const ORDER_STATUSES = ['pending', 'paid', 'preparing', 'ready', 'completed', 'cancelled'];
+const NOTIFIABLE_STATUSES = new Set(['paid', 'preparing', 'ready', 'completed', 'cancelled']);
 const transitions = {
   pending: ['cancelled'],
   paid: ['preparing', 'cancelled'],
@@ -20,7 +22,21 @@ const parseDate = (value, endOfDay = false) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const serializeOrder = order => ({
+const parseTimestamp = value => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const serializeDelivery = delivery => ({
+  kind: delivery.kind,
+  status: delivery.statusKey,
+  state: delivery.state,
+  sentAt: delivery.sentAt?.toISOString() || null,
+  attemptedAt: delivery.attemptedAt?.toISOString() || null,
+});
+
+const serializeOrder = (order, deliveries = []) => ({
   id: order.id,
   reference: order.reference,
   status: order.status,
@@ -36,11 +52,26 @@ const serializeOrder = order => ({
   currency: order.currency,
   amountTotal: order.amountTotal,
   items: order.items,
+  estimatedPrepMinutes: order.estimatedPrepMinutes,
   paidAt: order.paidAt?.toISOString() || null,
+  customerEmailSentAt: order.customerEmailSentAt?.toISOString() || null,
+  merchantEmailSentAt: order.merchantEmailSentAt?.toISOString() || null,
+  emailDeliveries: deliveries.map(serializeDelivery),
   createdAt: order.createdAt.toISOString(),
   updatedAt: order.updatedAt.toISOString(),
   allowedStatuses: transitions[order.status] || [],
 });
+
+const deliveryMapFor = deliveries => deliveries.reduce((map, delivery) => {
+  const list = map.get(delivery.orderId) || [];
+  list.push(delivery);
+  map.set(delivery.orderId, list);
+  return map;
+}, new Map());
+
+const loadDeliveries = async (db, orderIds) => orderIds.length
+  ? db.select().from(orderEmailDeliveries).where(inArray(orderEmailDeliveries.orderId, orderIds))
+  : [];
 
 const listOrders = async (req, db) => {
   const url = new URL(req.url);
@@ -49,6 +80,7 @@ const listOrders = async (req, db) => {
   const search = (url.searchParams.get('search') || '').trim().slice(0, 100);
   const from = parseDate(url.searchParams.get('from'));
   const to = parseDate(url.searchParams.get('to'), true);
+  const paidAfter = parseTimestamp(url.searchParams.get('paidAfter'));
   const filters = [];
 
   if (ORDER_STATUSES.includes(status)) filters.push(eq(orders.status, status));
@@ -63,16 +95,19 @@ const listOrders = async (req, db) => {
   }
   if (from) filters.push(gte(orders.createdAt, from));
   if (to) filters.push(lte(orders.createdAt, to));
+  if (paidAfter) filters.push(gte(orders.paidAt, paidAfter));
 
   const where = filters.length ? and(...filters) : undefined;
   const [rows, totalRows] = await Promise.all([
-    db.select().from(orders).where(where).orderBy(desc(orders.createdAt)).limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE),
+    db.select().from(orders).where(where).orderBy(desc(paidAfter ? orders.paidAt : orders.createdAt)).limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE),
     db.select({ value: count() }).from(orders).where(where),
   ]);
+  const deliveries = await loadDeliveries(db, rows.map(order => order.id));
+  const deliveriesByOrder = deliveryMapFor(deliveries);
   const total = Number(totalRows[0]?.value || 0);
 
   return json({
-    orders: rows.map(serializeOrder),
+    orders: rows.map(order => serializeOrder(order, deliveriesByOrder.get(order.id) || [])),
     pagination: {
       page,
       pageSize: PAGE_SIZE,
@@ -83,7 +118,7 @@ const listOrders = async (req, db) => {
   });
 };
 
-const updateOrder = async (req, db) => {
+const updateOrder = async (req, context, db) => {
   verifyRequestOrigin(req);
 
   let body;
@@ -94,33 +129,70 @@ const updateOrder = async (req, db) => {
   }
 
   const id = Number.parseInt(String(body.id || ''), 10);
-  const status = String(body.status || '');
-  if (!Number.isSafeInteger(id) || id < 1 || !ORDER_STATUSES.includes(status)) {
+  const hasStatus = body.status !== undefined;
+  const status = hasStatus ? String(body.status || '') : null;
+  const hasPrepTime = body.estimatedPrepMinutes !== undefined;
+  const estimatedPrepMinutes = body.estimatedPrepMinutes === null || body.estimatedPrepMinutes === ''
+    ? null
+    : Number.parseInt(String(body.estimatedPrepMinutes), 10);
+  const sendCustomerUpdate = body.sendCustomerUpdate === true;
+  const notifyCustomer = body.notifyCustomer === true;
+
+  if (!Number.isSafeInteger(id) || id < 1 || (hasStatus && !ORDER_STATUSES.includes(status))) {
     return json({ error: 'Invalid order update.' }, { status: 400 });
+  }
+  if (hasPrepTime && estimatedPrepMinutes !== null && (!Number.isSafeInteger(estimatedPrepMinutes) || estimatedPrepMinutes < 5 || estimatedPrepMinutes > 180)) {
+    return json({ error: 'Preparation time must be between 5 and 180 minutes.' }, { status: 400 });
+  }
+  if (!hasStatus && !hasPrepTime && !sendCustomerUpdate) {
+    return json({ error: 'Choose an order change.' }, { status: 400 });
   }
 
   const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!order) return json({ error: 'Order not found.' }, { status: 404 });
-  if (order.status === status) return json({ order: serializeOrder(order) });
-  if (!(transitions[order.status] || []).includes(status)) {
+
+  const statusChanged = hasStatus && order.status !== status;
+  if (statusChanged && !(transitions[order.status] || []).includes(status)) {
     return json({ error: `Orders cannot move from ${order.status} to ${status}.` }, { status: 409 });
   }
 
-  const [updated] = await db.update(orders).set({ status, updatedAt: new Date() })
-    .where(and(eq(orders.id, id), eq(orders.status, order.status)))
-    .returning();
+  const changes = { updatedAt: new Date() };
+  if (statusChanged) changes.status = status;
+  if (hasPrepTime) changes.estimatedPrepMinutes = estimatedPrepMinutes;
 
-  if (!updated) return json({ error: 'The order changed. Refresh and try again.' }, { status: 409 });
-  return json({ order: serializeOrder(updated) });
+  let updated = order;
+  if (statusChanged || hasPrepTime) {
+    const where = statusChanged
+      ? and(eq(orders.id, id), eq(orders.status, order.status))
+      : eq(orders.id, id);
+    [updated] = await db.update(orders).set(changes).where(where).returning();
+    if (!updated) return json({ error: 'The order changed. Refresh and try again.' }, { status: 409 });
+  }
+
+  const notificationStatus = updated.status;
+  const shouldNotify = (statusChanged && notifyCustomer) || sendCustomerUpdate;
+  if (shouldNotify) {
+    if (!NOTIFIABLE_STATUSES.has(notificationStatus)) {
+      return json({ error: 'Customer updates are available after payment.' }, { status: 409 });
+    }
+    const notification = sendCustomerStatusNotification(updated, notificationStatus, db).catch(error => {
+      console.error('Customer status notification task failed', error instanceof Error ? error.message : 'UnknownError');
+    });
+    if (context?.waitUntil) context.waitUntil(notification);
+    else await notification;
+  }
+
+  const deliveries = await loadDeliveries(db, [updated.id]);
+  return json({ order: serializeOrder(updated, deliveries), notificationQueued: shouldNotify });
 };
 
-export default async req => {
-  const admin = await requireAdmin();
+export default async (req, context) => {
+  const admin = await requireAdmin(req);
   if (!admin) return json({ error: 'Unauthorized.' }, { status: 401 });
-  const { db } = await import('../../db/index.js');
 
+  const { db } = await import('../../db/index.js');
   if (req.method === 'GET') return listOrders(req, db);
-  if (req.method === 'PATCH') return updateOrder(req, db);
+  if (req.method === 'PATCH') return updateOrder(req, context, db);
   return json({ error: 'Method not allowed.' }, { status: 405 });
 };
 
