@@ -1,49 +1,13 @@
 import { eq, or } from 'drizzle-orm';
 import { db } from '../../db/index.js';
 import { orders } from '../../db/schema.js';
-import { createCustomerEmail, createMerchantEmail, sendOrderEmail } from '../lib/order-emails.mjs';
+import { sendPaidOrderNotifications } from '../lib/order-notifications.mjs';
 import {
   paidOrderChanges,
   paymentFromStripeEvent,
   relevantStripeEvents,
   verifyStripeSignature,
 } from '../lib/stripe-webhook-helpers.mjs';
-
-const sendOrderNotifications = async order => {
-  const resendApiKey = Netlify.env.get('RESEND_API_KEY');
-  const emailFrom = Netlify.env.get('ORDER_EMAIL_FROM');
-  const merchantEmail = Netlify.env.get('ORDER_NOTIFICATION_EMAIL');
-  if (!resendApiKey || !emailFrom || !merchantEmail) {
-    console.error('Order email delivery is not configured');
-    return;
-  }
-
-  try {
-    if (!order.merchantEmailSentAt) {
-      await sendOrderEmail({
-        apiKey: resendApiKey,
-        from: emailFrom,
-        to: merchantEmail,
-        email: createMerchantEmail(order),
-        idempotencyKey: `${order.reference}-merchant`,
-      });
-      await db.update(orders).set({ merchantEmailSentAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
-    }
-
-    if (!order.customerEmailSentAt) {
-      await sendOrderEmail({
-        apiKey: resendApiKey,
-        from: emailFrom,
-        to: order.customerEmail,
-        email: createCustomerEmail(order),
-        idempotencyKey: `${order.reference}-customer`,
-      });
-      await db.update(orders).set({ customerEmailSentAt: new Date(), updatedAt: new Date() }).where(eq(orders.id, order.id));
-    }
-  } catch (error) {
-    console.error('Order email delivery failed', error instanceof Error ? error.message : 'UnknownError');
-  }
-};
 
 export default async (req, context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -88,8 +52,11 @@ export default async (req, context) => {
     .where(eq(orders.id, order.id))
     .returning();
 
-  if (context?.waitUntil) context.waitUntil(sendOrderNotifications(paidOrder));
-  else await sendOrderNotifications(paidOrder);
+  const notifications = sendPaidOrderNotifications(paidOrder).catch(error => {
+    console.error('Order notification task failed', error instanceof Error ? error.message : 'UnknownError');
+  });
+  if (context?.waitUntil) context.waitUntil(notifications);
+  else await notifications;
 
   return Response.json({ received: true });
 };

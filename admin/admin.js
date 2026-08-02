@@ -6,6 +6,10 @@ const state = {
   orders: [],
   pagination: { page: 1, pages: 1, total: 0 },
   filters: new URLSearchParams(),
+  lastPaidPollAt: null,
+  seenPaidOrderIds: new Set(),
+  newPaidOrderCount: 0,
+  soundEnabled: false,
 };
 
 const elements = {
@@ -39,6 +43,11 @@ const elements = {
   toast: document.querySelector('#toast'),
   sidebar: document.querySelector('.sidebar'),
   mobileMenu: document.querySelector('#mobile-menu'),
+  newOrderAlert: document.querySelector('#new-order-alert'),
+  newOrderAlertCount: document.querySelector('#new-order-alert-count'),
+  viewNewOrders: document.querySelector('#view-new-orders'),
+  toggleOrderSound: document.querySelector('#toggle-order-sound'),
+  dismissOrderAlert: document.querySelector('#dismiss-order-alert'),
 };
 
 const money = (amount, currency = 'gbp') => new Intl.NumberFormat('en-GB', {
@@ -71,6 +80,31 @@ const showToast = message => {
   elements.toast.textContent = message;
   elements.toast.hidden = false;
   toastTimer = window.setTimeout(() => { elements.toast.hidden = true; }, 3500);
+};
+
+const playOrderSound = () => {
+  if (!state.soundEnabled) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  const context = new AudioContext();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.frequency.value = 660;
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.36);
+  oscillator.addEventListener('ended', () => context.close());
+};
+
+const renderNewOrderAlert = () => {
+  elements.newOrderAlert.hidden = state.newPaidOrderCount < 1;
+  elements.newOrderAlertCount.textContent = state.newPaidOrderCount === 1
+    ? '1 new paid order'
+    : `${state.newPaidOrderCount} new paid orders`;
 };
 
 const api = async (path, options) => {
@@ -304,6 +338,17 @@ const customizationText = item => (item.customizations || []).flatMap(group =>
   (group.selections || []).map(selection => `${group.groupName}: ${selection.name}`)
 ).join(' · ');
 
+const deliveryFor = (order, kind, status) => order.emailDeliveries.find(delivery =>
+  delivery.kind === kind && delivery.status === status
+);
+
+const emailStateLabel = (sentAt, delivery) => {
+  if (sentAt) return `Sent ${longDate(sentAt)}`;
+  if (delivery?.state === 'failed') return 'Delivery failed — retry available';
+  if (delivery?.state === 'pending') return 'Sending';
+  return 'Not sent';
+};
+
 const createOrderCard = order => {
   const card = document.createElement('article');
   card.className = 'order-card';
@@ -393,6 +438,7 @@ const createOrderCard = order => {
     ['Address', [order.deliveryAddress, order.postcode].filter(Boolean).join(', ') || '—'],
     ['Notes', order.notes || '—'],
     ['Paid', order.paidAt ? longDate(order.paidAt) : 'Not yet'],
+    ['Prep time', order.estimatedPrepMinutes ? `${order.estimatedPrepMinutes} minutes` : 'Not set'],
   ];
   fields.forEach(([label, value]) => {
     const wrapper = document.createElement('div');
@@ -405,6 +451,59 @@ const createOrderCard = order => {
   });
   detailsSection.append(detailsTitle, details);
 
+  const prepControls = document.createElement('div');
+  prepControls.className = 'prep-controls';
+  const prepLabel = document.createElement('label');
+  const prepLabelText = document.createElement('span');
+  prepLabelText.textContent = 'Estimated preparation time';
+  const prepSelect = document.createElement('select');
+  prepSelect.setAttribute('aria-label', `Estimated preparation time for ${order.reference}`);
+  [null, 15, 20, 25, 30, 45, 60].forEach(minutes => {
+    const option = document.createElement('option');
+    option.value = minutes || '';
+    option.textContent = minutes ? `${minutes} minutes` : 'Not set';
+    option.selected = order.estimatedPrepMinutes === minutes;
+    prepSelect.append(option);
+  });
+  prepLabel.append(prepLabelText, prepSelect);
+  const savePrep = document.createElement('button');
+  savePrep.type = 'button';
+  savePrep.className = 'button button-secondary';
+  savePrep.textContent = 'Save prep time';
+  savePrep.addEventListener('click', () => updateOrder(order, {
+    estimatedPrepMinutes: prepSelect.value || null,
+  }, savePrep, 'Preparation time saved.'));
+  prepControls.append(prepLabel, savePrep);
+  detailsSection.append(prepControls);
+
+  const customerPaidDelivery = deliveryFor(order, 'customer', 'paid');
+  const merchantPaidDelivery = deliveryFor(order, 'merchant', 'paid');
+  const currentStatusDelivery = deliveryFor(order, 'customer', order.status);
+  const emailStatus = document.createElement('div');
+  emailStatus.className = 'email-status';
+  const emailTitle = document.createElement('h3');
+  emailTitle.className = 'detail-title';
+  emailTitle.textContent = 'Email delivery';
+  const customerEmailState = document.createElement('p');
+  customerEmailState.innerHTML = '<strong>Customer confirmation</strong>';
+  customerEmailState.append(document.createTextNode(emailStateLabel(order.customerEmailSentAt, customerPaidDelivery)));
+  const merchantEmailState = document.createElement('p');
+  merchantEmailState.innerHTML = '<strong>Admin notification</strong>';
+  merchantEmailState.append(document.createTextNode(emailStateLabel(order.merchantEmailSentAt, merchantPaidDelivery)));
+  const statusEmailState = document.createElement('p');
+  statusEmailState.innerHTML = `<strong>${titleCase(order.status)} update</strong>`;
+  statusEmailState.append(document.createTextNode(emailStateLabel(currentStatusDelivery?.sentAt, currentStatusDelivery)));
+  emailStatus.append(emailTitle, customerEmailState, merchantEmailState, statusEmailState);
+  detailsSection.append(emailStatus);
+
+  const notifyLabel = document.createElement('label');
+  notifyLabel.className = 'notify-choice';
+  const notifyCheckbox = document.createElement('input');
+  notifyCheckbox.type = 'checkbox';
+  notifyCheckbox.checked = true;
+  notifyLabel.append(notifyCheckbox, document.createTextNode('Email the customer when status changes'));
+  detailsSection.append(notifyLabel);
+
   if (order.allowedStatuses.length) {
     const actions = document.createElement('div');
     actions.className = 'status-actions';
@@ -413,10 +512,20 @@ const createOrderCard = order => {
       button.type = 'button';
       button.className = `button ${status === 'cancelled' ? 'button-secondary' : 'button-primary'}`;
       button.textContent = status === 'cancelled' ? 'Cancel order' : `Mark ${status}`;
-      button.addEventListener('click', () => updateStatus(order, status, button));
+      button.addEventListener('click', () => updateStatus(order, status, notifyCheckbox.checked, button));
       actions.append(button);
     });
     detailsSection.append(actions);
+  }
+
+  if (['paid', 'preparing', 'ready', 'completed', 'cancelled'].includes(order.status)) {
+    const sendUpdate = document.createElement('button');
+    sendUpdate.type = 'button';
+    sendUpdate.className = 'button button-quiet send-update';
+    sendUpdate.textContent = currentStatusDelivery?.state === 'sent' ? `${titleCase(order.status)} email sent` : 'Send customer update';
+    sendUpdate.disabled = currentStatusDelivery?.state === 'sent' || currentStatusDelivery?.state === 'pending';
+    sendUpdate.addEventListener('click', () => updateOrder(order, { sendCustomerUpdate: true }, sendUpdate, 'Customer update queued.'));
+    detailsSection.append(sendUpdate);
   }
 
   detail.append(itemsSection, detailsSection);
@@ -457,16 +566,16 @@ const loadOrders = async (page = state.pagination.page) => {
   }
 };
 
-const updateStatus = async (order, status, button) => {
+const updateOrder = async (order, changes, button, successMessage) => {
   const original = button.textContent;
   button.disabled = true;
   button.textContent = 'Updating…';
   try {
     await api('/api/admin/orders', {
       method: 'PATCH',
-      body: JSON.stringify({ id: order.id, status }),
+      body: JSON.stringify({ id: order.id, ...changes }),
     });
-    showToast(`${order.reference} is now ${status}.`);
+    showToast(`${order.reference}: ${successMessage}`);
     await Promise.all([loadOrders(), loadReport()]);
   } catch (error) {
     showNotice(elements.ordersNotice, error.message, true);
@@ -475,7 +584,32 @@ const updateStatus = async (order, status, button) => {
   }
 };
 
+const updateStatus = (order, status, notifyCustomer, button) => updateOrder(
+  order,
+  { status, notifyCustomer },
+  button,
+  `Order is now ${status}${notifyCustomer ? '; customer update queued' : ''}.`,
+);
+
 const refreshAll = async () => Promise.all([loadReport(), loadOrders(1)]);
+
+const pollForPaidOrders = async () => {
+  if (!state.lastPaidPollAt || document.hidden) return;
+  const paidAfter = state.lastPaidPollAt;
+  state.lastPaidPollAt = new Date().toISOString();
+  try {
+    const data = await api(`/api/admin/orders?paidAfter=${encodeURIComponent(paidAfter)}`);
+    const newOrders = data.orders.filter(order => order.paidAt && !state.seenPaidOrderIds.has(order.id));
+    data.orders.forEach(order => state.seenPaidOrderIds.add(order.id));
+    if (!newOrders.length) return;
+    state.newPaidOrderCount += newOrders.length;
+    renderNewOrderAlert();
+    playOrderSound();
+    await Promise.all([loadOrders(1), loadReport()]);
+  } catch (error) {
+    console.error('New order polling failed', error.message);
+  }
+};
 
 const bindEvents = () => {
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
@@ -498,6 +632,22 @@ const bindEvents = () => {
     const isOpen = elements.sidebar.classList.toggle('is-open');
     elements.mobileMenu.setAttribute('aria-expanded', String(isOpen));
   });
+  elements.viewNewOrders.addEventListener('click', () => {
+    state.newPaidOrderCount = 0;
+    renderNewOrderAlert();
+    state.filters = new URLSearchParams();
+    switchView('orders');
+    loadOrders(1);
+  });
+  elements.dismissOrderAlert.addEventListener('click', () => {
+    state.newPaidOrderCount = 0;
+    renderNewOrderAlert();
+  });
+  elements.toggleOrderSound.addEventListener('click', () => {
+    state.soundEnabled = !state.soundEnabled;
+    elements.toggleOrderSound.textContent = state.soundEnabled ? 'Sound enabled' : 'Enable sound';
+    if (state.soundEnabled) playOrderSound();
+  });
 };
 
 const start = async () => {
@@ -513,7 +663,9 @@ const start = async () => {
     elements.adminInitial.textContent = (session.admin.name || session.admin.email || 'A').charAt(0).toUpperCase();
     elements.loginShell.hidden = true;
     elements.appShell.hidden = false;
+    state.lastPaidPollAt = new Date().toISOString();
     await refreshAll();
+    window.setInterval(pollForPaidOrders, 20000);
   } catch {
     elements.loginShell.hidden = false;
     elements.appShell.hidden = true;

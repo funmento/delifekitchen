@@ -77,3 +77,12 @@ test('paid updates preserve the first paid timestamp and known Stripe ids', () =
   assert.equal(changes.stripePaymentIntentId, 'pi_123');
   assert.equal('stripeSessionId' in changes, false);
 });
+
+test('duplicate payment events do not move progressed orders back to paid', () => {
+  const changes = paidOrderChanges(
+    { status: 'preparing', paidAt: new Date('2026-08-02T12:00:00.000Z') },
+    { paidAt: new Date('2026-08-02T12:05:00.000Z'), sessionId: 'cs_123', paymentIntentId: 'pi_123' },
+  );
+
+  assert.equal(changes.status, 'preparing');
+});

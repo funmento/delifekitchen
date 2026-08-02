@@ -93,6 +93,14 @@
     </header>
 
     <main class="dashboard">
+      <div class="new-order-alert" id="new-order-alert" role="alert" hidden>
+        <div><strong id="new-order-alert-count">New paid order</strong><span>Open the order queue to review it.</span></div>
+        <div class="new-order-alert-actions">
+          <button class="button button-primary" type="button" id="view-new-orders">View orders</button>
+          <button class="button button-secondary" type="button" id="toggle-order-sound">Enable sound</button>
+          <button class="icon-button" type="button" id="dismiss-order-alert" aria-label="Dismiss new order alert">×</button>
+        </div>
+      </div>
       <section class="view is-active" id="overview-view" data-view-panel="overview">
         <header class="page-header">
           <div>
