@@ -1,5 +1,6 @@
 import { catalog, customizationSignature, resolveCustomizations } from './catalog.mjs';
 import { readCart, writeCart } from './cart.mjs';
+import './identity-flow.js';
 
 const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 const form = document.querySelector('#checkout-form');

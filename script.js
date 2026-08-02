@@ -1,3 +1,5 @@
+import('/identity-flow.js');
+
 const toggle = document.querySelector('.menu-toggle');
 const nav = document.querySelector('nav');
 
