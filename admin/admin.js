@@ -1,3 +1,5 @@
+import '../identity-flow.js';
+
 const state = {
   admin: null,
   report: null,

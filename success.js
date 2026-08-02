@@ -1,3 +1,5 @@
+import('/identity-flow.js');
+
 const referenceBox = document.querySelector('#order-reference');
 const referenceValue = document.querySelector('#order-reference-value');
 const sessionId = new URLSearchParams(window.location.search).get('session_id');
