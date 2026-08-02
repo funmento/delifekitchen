@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'">
+  <title>Kitchen Desk · Delife Kitchen</title>
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script type="module" src="/admin/admin.js"></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="login-shell" id="login-shell">
+    <section class="login-story" aria-labelledby="login-title">
+      <a class="wordmark" href="/" aria-label="Delife Kitchen home">
+        <span class="wordmark-mark">D</span>
+        <span>Delife Kitchen</span>
+      </a>
+      <div class="login-copy">
+        <p class="eyebrow">Private operations</p>
+        <h1 id="login-title">The kitchen,<br>at a glance.</h1>
+        <p>Review incoming orders, move each plate through service, and keep an eye on sales.</p>
+      </div>
+      <p class="login-footnote">Access is limited to invited team members with the admin role.</p>
+    </section>
+
+    <section class="login-panel" aria-label="Admin sign in">
+      <div class="login-card">
+        <div>
+          <p class="eyebrow">Kitchen Desk</p>
+          <h2>Welcome back</h2>
+          <p class="muted">Sign in with your Delife Kitchen admin account.</p>
+        </div>
+
+        <div class="notice notice-error" id="login-error" role="alert" hidden></div>
+
+        <form action="/api/admin/login" method="post" class="login-form">
+          <label>
+            <span>Email address</span>
+            <input type="email" name="email" autocomplete="username" required maxlength="200" placeholder="you@example.com">
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" name="password" autocomplete="current-password" required maxlength="300" placeholder="Your password">
+          </label>
+          <button class="button button-primary button-wide" type="submit">
+            <span>Enter Kitchen Desk</span>
+            <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+
+        <p class="login-help">Need access? Ask the site owner to invite you and assign the <strong>admin</strong> role in Netlify Identity.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="app-shell" id="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="wordmark wordmark-sidebar" href="/">
+        <span class="wordmark-mark">D</span>
+        <span>Delife Kitchen</span>
+      </a>
+
+      <nav class="nav" aria-label="Admin navigation">
+        <button class="nav-item is-active" type="button" data-view="overview">
+          <span class="nav-icon" aria-hidden="true">⌁</span>
+          Overview
+        </button>
+        <button class="nav-item" type="button" data-view="orders">
+          <span class="nav-icon" aria-hidden="true">≡</span>
+          Orders
+          <span class="nav-count" id="nav-order-count">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-account">
+        <div class="avatar" id="admin-initial">A</div>
+        <div class="account-copy">
+          <strong id="admin-name">Admin</strong>
+          <span id="admin-email"></span>
+        </div>
+        <form action="/api/admin/logout" method="post">
+          <button class="icon-button" type="submit" title="Sign out" aria-label="Sign out">↪</button>
+        </form>
+      </div>
+    </aside>
+
+    <header class="mobile-header">
+      <a class="wordmark" href="/"><span class="wordmark-mark">D</span><span>Kitchen Desk</span></a>
+      <button class="icon-button" id="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false">☰</button>
+    </header>
+
+    <main class="dashboard">
+      <section class="view is-active" id="overview-view" data-view-panel="overview">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Service overview</p>
+            <h1>Good <span id="day-part">day</span>.</h1>
+            <p class="muted" id="today-label"></p>
+          </div>
+          <button class="button button-secondary" type="button" id="refresh-dashboard">Refresh data</button>
+        </header>
+
+        <div class="notice" id="overview-notice" role="status" hidden></div>
+
+        <section class="metrics" aria-label="Sales summary">
+          <article class="metric-card metric-revenue">
+            <div class="metric-head"><span>Paid sales</span><span class="metric-glyph" aria-hidden="true">↗</span></div>
+            <strong id="metric-revenue">—</strong>
+            <span id="metric-range">Last 30 days</span>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span>Paid orders</span><span class="metric-glyph" aria-hidden="true">◎</span></div>
+            <strong id="metric-orders">—</strong>
+            <span>Orders with confirmed payment</span>
+          </article>
+          <article class="metric-card">
+            <div class="metric-head"><span>Average order</span><span class="metric-glyph" aria-hidden="true">◒</span></div>
+            <strong id="metric-average">—</strong>
+            <span>Across paid orders</span>
+          </article>
+          <article class="metric-card metric-accent">
+            <div class="metric-head"><span>Needs attention</span><span class="metric-glyph" aria-hidden="true">●</span></div>
+            <strong id="metric-active">—</strong>
+            <span>Paid, preparing, or ready</span>
+          </article>
+        </section>
+
+        <section class="overview-grid">
+          <article class="panel sales-panel">
+            <header class="panel-header">
+              <div><p class="eyebrow">Sales rhythm</p><h2>Paid revenue</h2></div>
+              <form class="date-range" id="report-range">
+                <label><span>From</span><input type="date" name="from" id="report-from"></label>
+                <label><span>To</span><input type="date" name="to" id="report-to"></label>
+                <button class="button button-small" type="submit">Apply</button>
+              </form>
+            </header>
+            <div class="chart-wrap">
+              <svg id="sales-chart" class="sales-chart" viewBox="0 0 720 260" role="img" aria-labelledby="chart-title chart-desc">
+                <title id="chart-title">Daily paid sales</title>
+                <desc id="chart-desc">A line chart showing paid revenue over the selected period.</desc>
+              </svg>
+              <div class="empty-state" id="chart-empty" hidden>No paid sales in this range yet.</div>
+            </div>
+          </article>
+
+          <article class="panel status-panel">
+            <header class="panel-header"><div><p class="eyebrow">Order pulse</p><h2>Current stages</h2></div></header>
+            <div class="status-list" id="status-summary"></div>
+          </article>
+        </section>
+
+        <section class="panel recent-panel">
+          <header class="panel-header">
+            <div><p class="eyebrow">Latest tickets</p><h2>Recent orders</h2></div>
+            <button class="text-button" type="button" data-go-orders>View all orders <span aria-hidden="true">→</span></button>
+          </header>
+          <div id="recent-orders" class="recent-orders"></div>
+        </section>
+      </section>
+
+      <section class="view" id="orders-view" data-view-panel="orders">
+        <header class="page-header orders-header">
+          <div>
+            <p class="eyebrow">Order management</p>
+            <h1>Every ticket,<br>in its place.</h1>
+          </div>
+          <div class="order-total"><strong id="order-total">0</strong><span>matching orders</span></div>
+        </header>
+
+        <form class="filters" id="order-filters">
+          <label class="search-field">
+            <span class="sr-only">Search orders</span>
+            <span aria-hidden="true">⌕</span>
+            <input type="search" name="search" placeholder="Reference, customer, email, phone">
+          </label>
+          <label>
+            <span class="sr-only">Order status</span>
+            <select name="status">
+              <option value="">All stages</option>
+              <option value="pending">Pending payment</option>
+              <option value="paid">Paid</option>
+              <option value="preparing">Preparing</option>
+              <option value="ready">Ready</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label><span class="sr-only">From date</span><input type="date" name="from" title="From date"></label>
+          <label><span class="sr-only">To date</span><input type="date" name="to" title="To date"></label>
+          <button class="button button-primary" type="submit">Filter</button>
+          <button class="button button-quiet" type="reset">Clear</button>
+        </form>
+
+        <div class="notice" id="orders-notice" role="status" hidden></div>
+        <div class="orders-list" id="orders-list" aria-live="polite"></div>
+
+        <nav class="pagination" aria-label="Order pages">
+          <button class="button button-secondary" type="button" id="previous-page">← Previous</button>
+          <span id="page-label">Page 1 of 1</span>
+          <button class="button button-secondary" type="button" id="next-page">Next →</button>
+        </nav>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
