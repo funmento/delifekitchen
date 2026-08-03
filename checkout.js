@@ -13,6 +13,9 @@ const collectionFields = document.querySelector('#collection-fields');
 const addressInput = form.elements.address;
 const postcodeInput = form.elements.postcode;
 const collectionTimeInput = form.elements.collectionTime;
+const fulfilmentStatus = document.querySelector('#fulfilment-status');
+const fulfilmentInputs = [...form.elements.fulfilment];
+let orderingAvailable = true;
 
 const requestedItem = new URLSearchParams(window.location.search).get('item');
 if (requestedItem && catalog[requestedItem]) {
@@ -64,7 +67,7 @@ const renderOrder = () => {
 
   const total = order.reduce((sum, item) => sum + item.resolved.unitAmount * item.quantity, 0);
   totalLabel.textContent = currency.format(total / 100);
-  submitButton.disabled = false;
+  submitButton.disabled = !orderingAvailable;
 };
 
 itemContainer.addEventListener('click', event => {
@@ -85,7 +88,49 @@ const setFulfilment = value => {
   collectionTimeInput.required = !isDelivery;
 };
 
-form.elements.fulfilment.forEach(input => input.addEventListener('change', event => setFulfilment(event.target.value)));
+const showFulfilmentStatus = message => {
+  fulfilmentStatus.textContent = message;
+  fulfilmentStatus.hidden = !message;
+};
+
+const applyDeliverySettings = settings => {
+  const deliveryInput = fulfilmentInputs.find(input => input.value === 'delivery');
+  const collectionInput = fulfilmentInputs.find(input => input.value === 'collection');
+  deliveryInput.disabled = !settings.deliveryEnabled;
+  collectionInput.disabled = !settings.collectionEnabled;
+  orderingAvailable = settings.deliveryEnabled || settings.collectionEnabled;
+
+  if (!orderingAvailable) {
+    fulfilmentInputs.forEach(input => { input.checked = false; });
+    deliveryFields.hidden = true;
+    collectionFields.hidden = true;
+    showFulfilmentStatus('Online ordering is temporarily unavailable. Please check back soon.');
+  } else {
+    const selected = fulfilmentInputs.find(input => input.checked && !input.disabled)
+      || (settings.collectionEnabled ? collectionInput : deliveryInput);
+    selected.checked = true;
+    setFulfilment(selected.value);
+    const unavailableMessages = [
+      !settings.deliveryEnabled ? settings.deliveryUnavailableMessage : '',
+      !settings.collectionEnabled ? 'Collection is currently unavailable. Delivery is still available.' : '',
+    ].filter(Boolean);
+    showFulfilmentStatus([settings.activeRule, ...unavailableMessages].filter(Boolean).join(' '));
+  }
+  renderOrder();
+};
+
+const loadDeliverySettings = async () => {
+  try {
+    const response = await fetch('/api/delivery-settings', { headers: { Accept: 'application/json' } });
+    const settings = await response.json();
+    if (!response.ok) throw new Error(settings.error || 'Delivery options could not be loaded.');
+    applyDeliverySettings(settings);
+  } catch {
+    showFulfilmentStatus('Delivery and collection availability is confirmed before secure payment opens.');
+  }
+};
+
+fulfilmentInputs.forEach(input => input.addEventListener('change', event => setFulfilment(event.target.value)));
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
@@ -132,3 +177,4 @@ form.addEventListener('submit', async event => {
 
 setFulfilment('collection');
 renderOrder();
+loadDeliverySettings();

@@ -1,4 +1,4 @@
-import { integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type OrderItem = {
   id: string;
@@ -29,6 +29,9 @@ export const orders = pgTable("orders", {
   fulfilment: text().notNull(),
   deliveryAddress: text("delivery_address"),
   postcode: text(),
+  deliveryValidationResult: text("delivery_validation_result"),
+  deliveryDistanceMiles: real("delivery_distance_miles"),
+  deliveryRestrictionMode: text("delivery_restriction_mode"),
   notes: text(),
   currency: text().notNull().default("gbp"),
   amountTotal: integer("amount_total").notNull(),
@@ -56,3 +59,15 @@ export const orderEmailDeliveries = pgTable("order_email_deliveries", {
 }, table => [
   uniqueIndex("order_email_deliveries_order_kind_status_idx").on(table.orderId, table.kind, table.statusKey),
 ]);
+
+export const deliverySettings = pgTable("delivery_settings", {
+  id: integer().primaryKey().default(1),
+  deliveryEnabled: boolean("delivery_enabled").notNull().default(true),
+  collectionEnabled: boolean("collection_enabled").notNull().default(true),
+  deliveryRestrictionMode: text("delivery_restriction_mode").notNull().default("none"),
+  baseDeliveryPostcode: text("base_delivery_postcode").notNull().default("M13 0XX"),
+  deliveryRadiusMiles: real("delivery_radius_miles").notNull().default(15),
+  allowedPostcodePrefixes: jsonb("allowed_postcode_prefixes").$type<string[]>().notNull().default([]),
+  deliveryUnavailableMessage: text("delivery_unavailable_message").notNull().default("Delivery is currently unavailable. Collection is still available."),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

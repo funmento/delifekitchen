@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../db/index.js';
-import { orders } from '../../db/schema.js';
 import { catalog, customizationSignature, customizationSummary, resolveCustomizations } from '../lib/catalog.mjs';
+import { validateDeliveryPostcode, validateFulfilmentAvailability } from '../lib/delivery-rules.mjs';
 
 const clean = (value, maxLength) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 const addMetadata = (params, metadata) => {
@@ -19,10 +18,20 @@ const createOrderReference = () => {
   return `DLK-${date}-${suffix}`;
 };
 
-export default async req => {
+export const createCheckoutSessionHandler = ({
+  database = null,
+  ordersTable = null,
+  env = globalThis.Netlify?.env,
+  stripeFetch = fetch,
+  loadDeliverySettings = async databaseClient => {
+    const { getDeliverySettings } = await import('../lib/delivery-settings.mjs');
+    return getDeliverySettings(databaseClient || undefined);
+  },
+  validatePostcode = validateDeliveryPostcode,
+} = {}) => async req => {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed.' }, { status: 405 });
 
-  const stripeSecretKey = Netlify.env.get('STRIPE_SECRET_KEY');
+  const stripeSecretKey = env?.get('STRIPE_SECRET_KEY');
   if (!stripeSecretKey) return Response.json({ error: 'Payments are not configured yet.' }, { status: 503 });
 
   let body;
@@ -51,6 +60,39 @@ export default async req => {
   }
   if (fulfilment === 'collection' && !collectionTime) {
     return Response.json({ error: 'Please provide your preferred collection time.' }, { status: 400 });
+  }
+
+  let deliverySettings;
+  try {
+    deliverySettings = await loadDeliverySettings(database);
+  } catch (error) {
+    console.error('Delivery settings checkout load failed', error instanceof Error ? error.name : 'UnknownError');
+    return Response.json({ error: 'Delivery options could not be checked. Please try again.' }, { status: 503 });
+  }
+
+  const fulfilmentAvailability = validateFulfilmentAvailability(fulfilment, deliverySettings);
+  if (!fulfilmentAvailability.allowed) {
+    return Response.json({ error: fulfilmentAvailability.message }, { status: 409 });
+  }
+
+  let deliveryValidation = null;
+  if (fulfilment === 'delivery') {
+    deliveryValidation = await validatePostcode(postcode, deliverySettings);
+    if (!deliveryValidation.allowed) {
+      const status = deliveryValidation.reason === 'postcode-lookup-unavailable' || deliveryValidation.reason === 'base-postcode-unavailable' ? 503 : 400;
+      return Response.json({ error: deliveryValidation.message }, { status });
+    }
+  }
+
+  let activeDatabase = database;
+  let activeOrdersTable = ordersTable;
+  if (!activeDatabase || !activeOrdersTable) {
+    const [databaseModule, schemaModule] = await Promise.all([
+      import('../../db/index.js'),
+      import('../../db/schema.js'),
+    ]);
+    activeDatabase ||= databaseModule.db;
+    activeOrdersTable ||= schemaModule.orders;
   }
 
   const validatedItems = items.map(item => {
@@ -94,14 +136,17 @@ export default async req => {
   const orderReference = createOrderReference();
 
   try {
-    await db.insert(orders).values({
+    await activeDatabase.insert(activeOrdersTable).values({
       reference: orderReference,
       customerName: name,
       customerEmail: email,
       customerPhone: phone,
       fulfilment,
       deliveryAddress: fulfilment === 'delivery' ? address : null,
-      postcode: fulfilment === 'delivery' ? postcode : null,
+      postcode: fulfilment === 'delivery' ? deliveryValidation.postcode : null,
+      deliveryValidationResult: fulfilment === 'delivery' ? deliveryValidation.validationResult : null,
+      deliveryDistanceMiles: fulfilment === 'delivery' ? deliveryValidation.distanceMiles : null,
+      deliveryRestrictionMode: fulfilment === 'delivery' ? deliveryValidation.restrictionMode : null,
       notes: [
         fulfilment === 'collection' ? `Preferred collection time: ${collectionTime}` : '',
         notes,
@@ -129,7 +174,7 @@ export default async req => {
     params.set('payment_intent_data[shipping][name]', name);
     params.set('payment_intent_data[shipping][phone]', phone);
     params.set('payment_intent_data[shipping][address][line1]', address);
-    params.set('payment_intent_data[shipping][address][postal_code]', postcode);
+    params.set('payment_intent_data[shipping][address][postal_code]', deliveryValidation.postcode);
     params.set('payment_intent_data[shipping][address][country]', 'GB');
   }
 
@@ -149,7 +194,7 @@ export default async req => {
     customer_email: email,
     fulfilment,
     delivery_address: fulfilment === 'delivery' ? address : 'Not applicable (collection)',
-    postcode: fulfilment === 'delivery' ? postcode : 'Not applicable (collection)',
+    postcode: fulfilment === 'delivery' ? deliveryValidation.postcode : 'Not applicable (collection)',
     preferred_collection_time: fulfilment === 'collection' ? collectionTime : 'Not applicable (delivery)',
     special_instructions_allergies: notes || 'None provided',
     total_price: `${(amountTotal / 100).toFixed(2)} GBP`,
@@ -164,14 +209,14 @@ export default async req => {
       missingFields,
       fieldCount: Object.keys(metadata).length,
     });
-    await db.delete(orders).where(eq(orders.reference, orderReference));
+    await activeDatabase.delete(activeOrdersTable).where(eq(activeOrdersTable.reference, orderReference));
     return Response.json({ error: 'Your order details could not be prepared for payment.' }, { status: 500 });
   }
 
   addMetadata(params, metadata);
 
   try {
-    const stripeResponse = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    const stripeResponse = await stripeFetch('https://api.stripe.com/v1/checkout/sessions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${stripeSecretKey}`,
@@ -183,22 +228,24 @@ export default async req => {
 
     if (!stripeResponse.ok) {
       console.error('Stripe Checkout Session error', session.error?.type || stripeResponse.status);
-      await db.delete(orders).where(eq(orders.reference, orderReference));
+      await activeDatabase.delete(activeOrdersTable).where(eq(activeOrdersTable.reference, orderReference));
       return Response.json({ error: 'Secure payment could not be opened. Please try again.' }, { status: 502 });
     }
 
-    await db.update(orders).set({
+    await activeDatabase.update(activeOrdersTable).set({
       stripeSessionId: session.id,
       updatedAt: new Date(),
-    }).where(eq(orders.reference, orderReference));
+    }).where(eq(activeOrdersTable.reference, orderReference));
 
     return Response.json({ url: session.url });
   } catch (error) {
     console.error('Stripe Checkout request failed', error instanceof Error ? error.name : 'UnknownError');
-    await db.delete(orders).where(eq(orders.reference, orderReference));
+    await activeDatabase.delete(activeOrdersTable).where(eq(activeOrdersTable.reference, orderReference));
     return Response.json({ error: 'Secure payment could not be opened. Please try again.' }, { status: 502 });
   }
 };
+
+export default createCheckoutSessionHandler();
 
 export const config = {
   path: '/api/create-checkout-session',
