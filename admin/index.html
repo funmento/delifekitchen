@@ -73,6 +73,10 @@
           Orders
           <span class="nav-count" id="nav-order-count">0</span>
         </button>
+        <button class="nav-item" type="button" data-view="settings">
+          <span class="nav-icon" aria-hidden="true">⊙</span>
+          Delivery settings
+        </button>
       </nav>
 
       <div class="sidebar-account">
@@ -211,6 +215,68 @@
           <span id="page-label">Page 1 of 1</span>
           <button class="button button-secondary" type="button" id="next-page">Next →</button>
         </nav>
+      </section>
+
+      <section class="view" id="settings-view" data-view-panel="settings">
+        <header class="page-header settings-header">
+          <div>
+            <p class="eyebrow">Ordering controls</p>
+            <h1>Set the edge<br>of delivery.</h1>
+            <p class="muted">Control fulfilment availability without changing existing paid orders.</p>
+          </div>
+          <div class="active-rule-card">
+            <span>Current active rule</span>
+            <strong id="active-delivery-rule">Loading delivery rules…</strong>
+            <small id="settings-updated-at"></small>
+          </div>
+        </header>
+
+        <div class="notice" id="settings-notice" role="status" hidden></div>
+        <form class="settings-form" id="delivery-settings-form">
+          <section class="panel settings-panel availability-panel">
+            <header class="panel-header"><div><p class="eyebrow">Service switches</p><h2>What customers can choose</h2></div></header>
+            <div class="settings-grid toggle-grid">
+              <label class="setting-toggle">
+                <span><strong>Delivery enabled</strong><small>Allow delivery when the active area rule passes.</small></span>
+                <input type="checkbox" name="deliveryEnabled"><i aria-hidden="true"></i>
+              </label>
+              <label class="setting-toggle">
+                <span><strong>Collection enabled</strong><small>Allow customers to collect from the kitchen.</small></span>
+                <input type="checkbox" name="collectionEnabled"><i aria-hidden="true"></i>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel settings-panel">
+            <header class="panel-header"><div><p class="eyebrow">Delivery area</p><h2>Choose the boundary</h2></div></header>
+            <div class="settings-body">
+              <fieldset class="restriction-options">
+                <legend class="sr-only">Delivery restriction mode</legend>
+                <label><input type="radio" name="deliveryRestrictionMode" value="none"><span><strong>No restriction</strong><small>All valid UK postcodes</small></span></label>
+                <label><input type="radio" name="deliveryRestrictionMode" value="prefixes"><span><strong>Postcode prefixes</strong><small>Selected Manchester districts</small></span></label>
+                <label><input type="radio" name="deliveryRestrictionMode" value="radius"><span><strong>Radius</strong><small>Miles from a base postcode</small></span></label>
+              </fieldset>
+
+              <div class="settings-grid rule-fields" id="radius-settings" hidden>
+                <label><span>Base delivery postcode</span><input type="text" name="baseDeliveryPostcode" maxlength="20" placeholder="M13 0XX"></label>
+                <label><span>Delivery radius in miles</span><input type="number" name="deliveryRadiusMiles" min="0.1" max="100" step="0.1" placeholder="15"></label>
+              </div>
+
+              <div class="rule-fields" id="prefix-settings" hidden>
+                <label><span>Allowed postcode prefixes</span><textarea name="allowedPostcodePrefixes" rows="7" maxlength="1200" placeholder="M1, M2, M3"></textarea><small>Separate prefixes with commas, spaces, or new lines.</small></label>
+              </div>
+
+              <div class="rule-fields">
+                <label><span>Delivery unavailable message</span><textarea name="deliveryUnavailableMessage" rows="3" maxlength="300"></textarea></label>
+              </div>
+            </div>
+          </section>
+
+          <div class="settings-actions">
+            <p>Postcodes are validated using Postcodes.io before Stripe checkout opens.</p>
+            <button class="button button-primary" id="save-delivery-settings" type="submit">Save delivery settings</button>
+          </div>
+        </form>
       </section>
     </main>
   </div>

@@ -10,6 +10,7 @@ const state = {
   seenPaidOrderIds: new Set(),
   newPaidOrderCount: 0,
   soundEnabled: false,
+  deliverySettings: null,
 };
 
 const elements = {
@@ -48,6 +49,13 @@ const elements = {
   viewNewOrders: document.querySelector('#view-new-orders'),
   toggleOrderSound: document.querySelector('#toggle-order-sound'),
   dismissOrderAlert: document.querySelector('#dismiss-order-alert'),
+  deliverySettingsForm: document.querySelector('#delivery-settings-form'),
+  settingsNotice: document.querySelector('#settings-notice'),
+  activeDeliveryRule: document.querySelector('#active-delivery-rule'),
+  settingsUpdatedAt: document.querySelector('#settings-updated-at'),
+  radiusSettings: document.querySelector('#radius-settings'),
+  prefixSettings: document.querySelector('#prefix-settings'),
+  saveDeliverySettings: document.querySelector('#save-delivery-settings'),
 };
 
 const money = (amount, currency = 'gbp') => new Intl.NumberFormat('en-GB', {
@@ -149,13 +157,82 @@ const showLoginError = () => {
   if (messages[error]) showNotice(elements.loginError, messages[error], true);
 };
 
-const switchView = view => {
+const switchView = (view, updateHistory = false) => {
   document.querySelectorAll('[data-view-panel]').forEach(panel => panel.classList.toggle('is-active', panel.dataset.viewPanel === view));
   document.querySelectorAll('[data-view]').forEach(button => button.classList.toggle('is-active', button.dataset.view === view));
   elements.sidebar.classList.remove('is-open');
   elements.mobileMenu.setAttribute('aria-expanded', 'false');
   if (view === 'orders' && !state.orders.length) loadOrders();
+  if (view === 'settings' && !state.deliverySettings) loadDeliverySettings();
+  if (updateHistory) window.history.pushState({}, '', view === 'settings' ? '/admin/settings' : '/admin/');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const setRestrictionFields = mode => {
+  elements.radiusSettings.hidden = mode !== 'radius';
+  elements.prefixSettings.hidden = mode !== 'prefixes';
+};
+
+const renderDeliverySettings = settings => {
+  state.deliverySettings = settings;
+  const form = elements.deliverySettingsForm.elements;
+  form.deliveryEnabled.checked = settings.deliveryEnabled;
+  form.collectionEnabled.checked = settings.collectionEnabled;
+  form.deliveryRestrictionMode.value = settings.deliveryRestrictionMode;
+  form.baseDeliveryPostcode.value = settings.baseDeliveryPostcode || '';
+  form.deliveryRadiusMiles.value = settings.deliveryRadiusMiles;
+  form.allowedPostcodePrefixes.value = settings.allowedPostcodePrefixes.join(', ');
+  form.deliveryUnavailableMessage.value = settings.deliveryUnavailableMessage;
+  elements.activeDeliveryRule.textContent = settings.orderingDisabled ? 'Online ordering is temporarily disabled.' : settings.activeRule;
+  elements.settingsUpdatedAt.textContent = settings.updatedAt ? `Last updated ${longDate(settings.updatedAt)}` : '';
+  setRestrictionFields(settings.deliveryRestrictionMode);
+};
+
+const loadDeliverySettings = async () => {
+  clearNotice(elements.settingsNotice);
+  try {
+    const data = await api('/api/admin/delivery-settings');
+    renderDeliverySettings(data.settings);
+  } catch (error) {
+    showNotice(elements.settingsNotice, error.message, true);
+  }
+};
+
+const saveDeliverySettings = async event => {
+  event.preventDefault();
+  clearNotice(elements.settingsNotice);
+  const formData = new FormData(elements.deliverySettingsForm);
+  const deliveryEnabled = formData.get('deliveryEnabled') === 'on';
+  const collectionEnabled = formData.get('collectionEnabled') === 'on';
+  let confirmOrderingDisabled = false;
+  if (!deliveryEnabled && !collectionEnabled) {
+    confirmOrderingDisabled = window.confirm('Turn off both delivery and collection and temporarily disable ordering?');
+    if (!confirmOrderingDisabled) return;
+  }
+
+  elements.saveDeliverySettings.disabled = true;
+  try {
+    const data = await api('/api/admin/delivery-settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        deliveryEnabled,
+        collectionEnabled,
+        deliveryRestrictionMode: formData.get('deliveryRestrictionMode'),
+        baseDeliveryPostcode: formData.get('baseDeliveryPostcode'),
+        deliveryRadiusMiles: formData.get('deliveryRadiusMiles'),
+        allowedPostcodePrefixes: formData.get('allowedPostcodePrefixes'),
+        deliveryUnavailableMessage: formData.get('deliveryUnavailableMessage'),
+        confirmOrderingDisabled,
+      }),
+    });
+    renderDeliverySettings(data.settings);
+    showNotice(elements.settingsNotice, 'Delivery settings saved. Checkout is using the updated rules.');
+    showToast('Delivery settings saved');
+  } catch (error) {
+    showNotice(elements.settingsNotice, error.message, true);
+  } finally {
+    elements.saveDeliverySettings.disabled = false;
+  }
 };
 
 const renderStatusSummary = statuses => {
@@ -436,6 +513,9 @@ const createOrderCard = order => {
     ['Phone', order.customer.phone],
     ['Method', titleCase(order.fulfilment)],
     ['Address', [order.deliveryAddress, order.postcode].filter(Boolean).join(', ') || '—'],
+    ['Delivery validation', order.deliveryValidationResult ? titleCase(order.deliveryValidationResult) : '—'],
+    ['Delivery rule', order.deliveryRestrictionMode ? titleCase(order.deliveryRestrictionMode) : '—'],
+    ['Delivery distance', Number.isFinite(order.deliveryDistanceMiles) ? `${order.deliveryDistanceMiles.toFixed(1)} miles` : '—'],
     ['Notes', order.notes || '—'],
     ['Paid', order.paidAt ? longDate(order.paidAt) : 'Not yet'],
     ['Prep time', order.estimatedPrepMinutes ? `${order.estimatedPrepMinutes} minutes` : 'Not set'],
@@ -612,7 +692,7 @@ const pollForPaidOrders = async () => {
 };
 
 const bindEvents = () => {
-  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
+  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view, true)));
   document.querySelectorAll('[data-go-orders]').forEach(button => button.addEventListener('click', () => switchView('orders')));
   document.querySelector('#refresh-dashboard').addEventListener('click', refreshAll);
   document.querySelector('#report-range').addEventListener('submit', event => { event.preventDefault(); loadReport(); });
@@ -648,6 +728,9 @@ const bindEvents = () => {
     elements.toggleOrderSound.textContent = state.soundEnabled ? 'Sound enabled' : 'Enable sound';
     if (state.soundEnabled) playOrderSound();
   });
+  elements.deliverySettingsForm.addEventListener('submit', saveDeliverySettings);
+  elements.deliverySettingsForm.elements.deliveryRestrictionMode.forEach(input => input.addEventListener('change', event => setRestrictionFields(event.target.value)));
+  window.addEventListener('popstate', () => switchView(window.location.pathname === '/admin/settings' ? 'settings' : 'overview'));
 };
 
 const start = async () => {
@@ -665,6 +748,7 @@ const start = async () => {
     elements.appShell.hidden = false;
     state.lastPaidPollAt = new Date().toISOString();
     await refreshAll();
+    switchView(window.location.pathname === '/admin/settings' ? 'settings' : 'overview');
     window.setInterval(pollForPaidOrders, 20000);
   } catch {
     elements.loginShell.hidden = false;
