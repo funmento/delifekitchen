@@ -1,2 +1,4 @@
 /admin/login  /admin/  200
 /admin/settings  /admin/  200
+/admin/products  /admin/products.html  200
+/products/*  /product.html  200

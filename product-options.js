@@ -2,13 +2,47 @@ import { catalog, customizationSignature, resolveCustomizations } from './catalo
 import { addCartItem, readCart, writeCart } from './cart.mjs';
 
 const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
-const productId = window.location.pathname.split('/').pop().replace('.html', '');
-const product = catalog[productId];
+const pathSlug = window.location.pathname.split('/').pop().replace('.html', '');
+const productId = pathSlug === 'product' ? new URLSearchParams(window.location.search).get('slug') : pathSlug;
+let product = catalog[productId];
 const details = document.querySelector('.product-details');
 const addButton = document.querySelector('.quick-checkout');
 const priceLabel = document.querySelector('.product-price');
 
-if (product && details && addButton) {
+try {
+  const response = await fetch(`/api/products?slug=${encodeURIComponent(productId)}`);
+  if (response.ok) {
+    const data = await response.json();
+    product = data.product;
+    catalog[productId] = product;
+    document.title = `${product.name} | DeLife Kitchen`;
+    document.querySelector('.product-details h1').textContent = product.name;
+    document.querySelector('.product-description').textContent = product.fullDescription || product.shortDescription;
+    document.querySelector('.product-category').textContent = product.category?.name || 'Delife Kitchen menu';
+    document.querySelector('.product-breadcrumb span:last-child').textContent = product.name;
+    const image = document.querySelector('.product-visual img');
+    image.src = product.imageUrl;
+    image.alt = `${product.name} prepared by DeLife Kitchen`;
+  } else if (response.status === 404 || response.status === 410) {
+    product = null;
+  }
+} catch {
+  // Static product data remains available as a safe first-phase fallback.
+}
+
+if (!product && details) {
+  details.innerHTML = '<p class="product-category">Menu update</p><h1>Currently unavailable</h1><p class="product-description">This dish is not available to order right now. Please return to the menu to choose another favourite.</p><a class="quick-checkout" href="../menu.html">Back to menu <span aria-hidden="true">↗</span></a>';
+}
+
+if (product?.soldOut && details && addButton) {
+  addButton.removeAttribute('href');
+  addButton.classList.add('is-disabled');
+  addButton.setAttribute('aria-disabled', 'true');
+  addButton.innerHTML = '<span class="add-label">Sold out</span>';
+  priceLabel.textContent = currency.format(product.unitAmount / 100);
+}
+
+if (product && !product.soldOut && details && addButton) {
   const form = document.createElement('form');
   form.className = 'product-customizer';
   form.noValidate = true;
