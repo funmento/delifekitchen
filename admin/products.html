@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; form-action 'self'; img-src 'self' data: https:; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'">
+  <title>Products | Delife Kitchen</title>
+  <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/admin/admin.css"><link rel="stylesheet" href="/admin/products.css">
+  <script type="module" src="/admin/products.js"></script>
+</head>
+<body><div class="grain" aria-hidden="true"></div>
+  <div class="app-shell product-shell" id="product-app" hidden>
+    <aside class="sidebar">
+      <a class="wordmark wordmark-sidebar" href="/"><img class="wordmark-icon" src="/assets/brand/delife-kitchen-icon.png" alt="Delife Kitchen"><span>Delife Kitchen</span></a>
+      <nav class="nav" aria-label="Admin navigation">
+        <a class="nav-item" href="/admin/"><span class="nav-icon">⌁</span>Overview</a>
+        <a class="nav-item" href="/admin/"><span class="nav-icon">≡</span>Orders</a>
+        <a class="nav-item is-active" href="/admin/products"><span class="nav-icon">◇</span>Products</a>
+        <a class="nav-item" href="/admin/settings"><span class="nav-icon">⊙</span>Delivery settings</a>
+      </nav>
+      <div class="sidebar-account"><div class="avatar" id="admin-initial">A</div><div class="account-copy"><strong id="admin-name">Admin</strong><span id="admin-email"></span></div><form action="/api/admin/logout" method="post"><button class="icon-button" type="submit" aria-label="Sign out">↪</button></form></div>
+    </aside>
+    <main class="dashboard product-dashboard">
+      <header class="page-header product-header"><div><p class="eyebrow">Menu control</p><h1>Products,<br>without code.</h1><p class="muted">Prices are stored in pence and verified again before Stripe checkout.</p></div><button class="button button-primary" id="new-product" type="button">Add product</button></header>
+      <div class="notice" id="notice" hidden></div>
+      <section class="product-layout">
+        <div class="catalog-column">
+          <div class="catalog-tools panel"><input id="search" type="search" placeholder="Search products"><select id="category-filter"><option value="">All categories</option></select><select id="active-filter"><option value="">Any visibility</option><option value="true">Active</option><option value="false">Inactive</option></select><select id="stock-filter"><option value="">Any stock</option><option value="false">In stock</option><option value="true">Sold out</option></select></div>
+          <div class="product-list" id="product-list" aria-live="polite"></div>
+        </div>
+        <aside class="editor-column">
+          <form class="panel editor" id="product-form">
+            <input type="hidden" name="id"><header class="panel-header"><div><p class="eyebrow">Product editor</p><h2 id="editor-title">Add a product</h2></div></header>
+            <div class="editor-grid"><label><span>Name</span><input name="name" required maxlength="160"></label><label><span>Slug</span><input name="slug" required maxlength="80" pattern="[a-z0-9-]+"></label><label class="wide"><span>Short description</span><textarea name="shortDescription" rows="3" maxlength="500"></textarea></label><label class="wide"><span>Full description</span><textarea name="fullDescription" rows="5" maxlength="5000"></textarea></label><label><span>Price (£)</span><input name="price" type="number" required min="0.01" step="0.01"></label><label><span>Category</span><select name="categoryId"></select></label><label class="wide"><span>Image URL</span><input name="imageUrl" type="text" maxlength="1000" placeholder="/assets/dish.jpeg or https://…"></label><label><span>Display order</span><input name="sortOrder" type="number" step="1" value="0"></label></div>
+            <div class="toggle-row"><label><input name="active" type="checkbox" checked><span>Active</span></label><label><input name="soldOut" type="checkbox"><span>Sold out</span></label><label><input name="featured" type="checkbox"><span>Featured</span></label></div>
+            <div class="editor-actions"><button class="button button-secondary" id="cancel-edit" type="button">Cancel</button><button class="button button-primary" type="submit">Save product</button></div>
+          </form>
+          <section class="panel option-editor" id="option-editor" hidden><header class="panel-header"><div><p class="eyebrow">Customisations</p><h2>Option groups</h2></div><button class="button button-secondary" id="add-group" type="button">Add group</button></header><div id="option-groups"></div></section>
+          <section class="panel category-editor"><header class="panel-header"><div><p class="eyebrow">Menu structure</p><h2>Categories</h2></div><button class="button button-secondary" id="add-category" type="button">Add category</button></header><div id="category-list"></div></section>
+        </aside>
+      </section>
+    </main>
+  </div>
+  <main class="login-shell" id="access-denied" hidden><section class="login-panel"><div class="login-card"><p class="eyebrow">Kitchen Desk</p><h2>Admin access required</h2><p class="muted">Sign in through the admin dashboard to manage products.</p><a class="button button-primary" href="/admin/">Open admin sign in</a></div></section></main>
+</body></html>

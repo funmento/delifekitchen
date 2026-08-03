@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type OrderItem = {
   id: string;
@@ -71,3 +71,67 @@ export const deliverySettings = pgTable("delivery_settings", {
   deliveryUnavailableMessage: text("delivery_unavailable_message").notNull().default("Delivery is currently unavailable. Collection is still available."),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const categories = pgTable("categories", {
+  id: serial().primaryKey(),
+  name: text().notNull(),
+  slug: text().notNull().unique(),
+  description: text().notNull().default(""),
+  active: boolean().notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index("categories_active_sort_idx").on(table.active, table.sortOrder),
+]);
+
+export const products = pgTable("products", {
+  id: serial().primaryKey(),
+  slug: text().notNull().unique(),
+  name: text().notNull(),
+  shortDescription: text("short_description").notNull().default(""),
+  fullDescription: text("full_description").notNull().default(""),
+  price: integer().notNull(),
+  imageUrl: text("image_url").notNull().default(""),
+  categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
+  active: boolean().notNull().default(true),
+  soldOut: boolean("sold_out").notNull().default(false),
+  featured: boolean().notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index("products_category_sort_idx").on(table.categoryId, table.sortOrder),
+  index("products_active_sold_out_idx").on(table.active, table.soldOut),
+]);
+
+export const productOptionGroups = pgTable("product_option_groups", {
+  id: serial().primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  key: text().notNull(),
+  name: text().notNull(),
+  required: boolean().notNull().default(false),
+  minSelections: integer("min_selections").notNull().default(0),
+  maxSelections: integer("max_selections").notNull().default(1),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("product_option_groups_product_key_idx").on(table.productId, table.key),
+  index("product_option_groups_product_sort_idx").on(table.productId, table.sortOrder),
+]);
+
+export const productOptions = pgTable("product_options", {
+  id: serial().primaryKey(),
+  groupId: integer("group_id").notNull().references(() => productOptionGroups.id, { onDelete: "cascade" }),
+  key: text().notNull(),
+  name: text().notNull(),
+  priceAdjustment: integer("price_adjustment").notNull().default(0),
+  active: boolean().notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("product_options_group_key_idx").on(table.groupId, table.key),
+  index("product_options_group_active_sort_idx").on(table.groupId, table.active, table.sortOrder),
+]);

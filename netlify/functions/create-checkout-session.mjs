@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { catalog, customizationSignature, customizationSummary, resolveCustomizations } from '../lib/catalog.mjs';
+import { customizationSignature, customizationSummary } from '../lib/catalog.mjs';
+import { resolveProductCustomizations } from '../lib/product-validation.mjs';
 import { validateDeliveryPostcode, validateFulfilmentAvailability } from '../lib/delivery-rules.mjs';
 
 const clean = (value, maxLength) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -28,6 +29,7 @@ export const createCheckoutSessionHandler = ({
     return getDeliverySettings(databaseClient || undefined);
   },
   validatePostcode = validateDeliveryPostcode,
+  loadProducts = async (databaseClient, slugs) => (await import('../lib/products.mjs')).loadCatalog(databaseClient, { slugs }),
 } = {}) => async req => {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed.' }, { status: 405 });
 
@@ -95,21 +97,35 @@ export const createCheckoutSessionHandler = ({
     activeOrdersTable ||= schemaModule.orders;
   }
 
+  let databaseProducts;
+  try {
+    databaseProducts = await loadProducts(activeDatabase, [...new Set(items.map(item => clean(item?.id, 80)).filter(Boolean))]);
+  } catch (error) {
+    console.error('Checkout product load failed', error instanceof Error ? error.name : 'UnknownError');
+    return Response.json({ error: 'Current product prices could not be checked. Please try again.' }, { status: 503 });
+  }
+  const productsBySlug = new Map(databaseProducts.map(product => [product.slug, product]));
+
   const validatedItems = items.map(item => {
     const id = clean(item?.id, 80);
     const quantity = Number(item?.quantity);
+    const submittedUnitAmount = Number(item?.unitAmount);
     const customizations = Array.isArray(item?.customizations)
       ? item.customizations.slice(0, 20).map(group => ({
         groupId: clean(group?.groupId, 80),
         selectionIds: Array.isArray(group?.selectionIds) ? group.selectionIds.slice(0, 20).map(selection => clean(selection, 80)) : [],
       }))
       : [];
-    const resolved = resolveCustomizations(id, customizations);
-    return { id, quantity, customizations, resolved };
-  }).filter(item => catalog[item.id] && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20 && item.resolved.valid);
+    const product = productsBySlug.get(id);
+    const resolved = resolveProductCustomizations(product, customizations);
+    return { id, quantity, submittedUnitAmount, customizations, product, resolved };
+  }).filter(item => item.product && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20 && item.resolved.valid);
 
   if (!validatedItems.length || validatedItems.length !== items.length) {
     return Response.json({ error: 'Your order contains an invalid item. Please return to the menu and try again.' }, { status: 400 });
+  }
+  if (validatedItems.some(item => Number.isInteger(item.submittedUnitAmount) && item.submittedUnitAmount !== item.resolved.unitAmount)) {
+    return Response.json({ error: 'A product price or option has changed. Please review your basket before payment.' }, { status: 409 });
   }
 
   const consolidatedItems = [...validatedItems.reduce((itemsBySignature, item) => {
@@ -126,7 +142,7 @@ export const createCheckoutSessionHandler = ({
 
   const orderItems = consolidatedItems.map(item => ({
     id: item.id,
-    name: catalog[item.id].name,
+    name: item.product.name,
     quantity: item.quantity,
     unitAmount: item.resolved.unitAmount,
     lineTotal: item.resolved.unitAmount * item.quantity,
