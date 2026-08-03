@@ -17,7 +17,7 @@ if (inviteToken || recoveryToken) {
   dialog.className = 'identity-flow';
   dialog.innerHTML = `
     <section class="identity-flow-card" role="dialog" aria-modal="true" aria-labelledby="identity-flow-title">
-      <a class="identity-flow-brand" href="/" aria-label="Delife Kitchen home">D</a>
+      <a class="identity-flow-brand" href="/" aria-label="Delife Kitchen home"><img src="/assets/brand/delife-kitchen-icon.png" alt="Delife Kitchen African and Caribbean Cuisine"></a>
       <p class="identity-flow-eyebrow">Kitchen Desk</p>
       <h1 id="identity-flow-title">${flow === 'invite' ? 'Create your password' : 'Reset your password'}</h1>
       <p class="identity-flow-copy">${flow === 'invite' ? 'Set a password to finish accepting your team invitation.' : 'Choose a new password for your Delife Kitchen account.'}</p>

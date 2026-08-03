@@ -24,6 +24,7 @@ const customizationText = item => (item.customizations || [])
 const customizationHtml = item => (item.customizations || [])
   .map(group => `<div style="color:#666;font-size:12px;margin-top:3px;"><strong>${escapeHtml(group.groupName)}:</strong> ${escapeHtml(group.selections.map(option => option.name).join(', '))}</div>`)
   .join('');
+const cuisineDescription = 'African and Caribbean Cuisine';
 
 const helpText = ({ helpEmail, helpPhone } = {}) => {
   const contacts = [helpEmail, helpPhone].filter(Boolean).join(' or ');
@@ -76,21 +77,27 @@ const orderDetailsHtml = (order, { includeCustomerContact = true } = {}) => {
     </div>`;
 };
 
-const customerFrame = content => `
+const emailBrandHeader = ({ logoUrl } = {}) => logoUrl
+  ? `<div style="background:transparent;max-width:620px;margin:0 auto;padding:22px 30px 14px;box-sizing:border-box;text-align:center;"><img src="${escapeHtml(logoUrl)}" width="280" alt="Delife Kitchen African and Caribbean Cuisine" style="display:block;height:auto;margin:0 auto;max-width:100%;width:280px;"></div>`
+  : `<div style="background:transparent;max-width:620px;margin:0 auto;padding:24px 30px 12px;box-sizing:border-box;text-align:center;"><strong style="color:#3b0909;font-family:Georgia,serif;font-size:26px;">Delife Kitchen</strong><div style="color:#8a6000;font-size:11px;font-weight:700;letter-spacing:.08em;margin-top:6px;text-transform:uppercase;">${cuisineDescription}</div></div>`;
+
+const customerFrame = (content, branding = {}) => `
   <div style="background:#f6f0e5;color:#1b2118;font-family:Arial,sans-serif;padding:28px;">
+    ${emailBrandHeader(branding)}
     ${content}
+    <div style="color:#697063;font-size:11px;letter-spacing:.04em;margin:18px auto 0;max-width:620px;text-align:center;">Delife Kitchen · ${cuisineDescription}</div>
   </div>`;
 
-export const createMerchantEmail = order => ({
-  subject: `New paid order ${order.reference} — ${money(order).format(order.amountTotal / 100)}`,
-  text: `A new Stripe order has been paid.\n\n${orderDetailsText(order)}`,
-  html: customerFrame(orderDetailsHtml(order)),
+export const createMerchantEmail = (order, branding = {}) => ({
+  subject: `New Delife Kitchen paid order ${order.reference} — ${money(order).format(order.amountTotal / 100)}`,
+  text: `Delife Kitchen · ${cuisineDescription}\n\nA new Stripe order has been paid.\n\n${orderDetailsText(order)}`,
+  html: customerFrame(orderDetailsHtml(order), branding),
   replyTo: order.customerEmail,
 });
 
-export const createCustomerEmail = (order, help = {}) => ({
-  subject: `DeLife Kitchen order confirmation — ${order.reference}`,
-  text: `Hi ${order.customerName},\n\nThank you for your order. Your payment was successful and DeLife Kitchen has received your order.\n\n${orderDetailsText(order, { includeCustomerContact: false })}\n\n${helpText(help)}`,
+export const createCustomerEmail = (order, help = {}, branding = {}) => ({
+  subject: `Delife Kitchen order confirmation — ${order.reference}`,
+  text: `Delife Kitchen · ${cuisineDescription}\n\nHi ${order.customerName},\n\nThank you for your order. Your payment was successful and Delife Kitchen has received your order.\n\n${orderDetailsText(order, { includeCustomerContact: false })}\n\n${helpText(help)}`,
   html: customerFrame(`
     <div style="background:#fff;max-width:620px;margin:0 auto 12px;padding:30px;box-sizing:border-box;">
       <p style="color:#e95028;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Payment confirmed</p>
@@ -100,7 +107,7 @@ export const createCustomerEmail = (order, help = {}) => ({
     ${orderDetailsHtml(order, { includeCustomerContact: false })}
     <div style="background:#fff;max-width:620px;margin:12px auto 0;padding:24px 30px;box-sizing:border-box;">
       <p style="margin:0;">${escapeHtml(helpText(help))}</p>
-    </div>`),
+    </div>`, branding),
   ...(help.helpEmail ? { replyTo: help.helpEmail } : {}),
 });
 
@@ -127,15 +134,15 @@ const statusContent = {
   },
 };
 
-export const createStatusEmail = (order, status, help = {}) => {
+export const createStatusEmail = (order, status, help = {}, branding = {}) => {
   const content = statusContent[status];
   if (!content) throw new Error(`Unsupported customer email status: ${status}`);
   const preparation = status === 'preparing' && prepText(order) ? ` ${prepText(order)}` : '';
   const message = `${content.message}${preparation}`;
 
   return {
-    subject: `${content.label} — ${order.reference}`,
-    text: `Hi ${order.customerName},\n\n${message}\n\nOrder reference: ${order.reference}\nOrder status: ${status}\n${prepText(order) ? `${prepText(order)}\n` : ''}\n${helpText(help)}`,
+    subject: `Delife Kitchen: ${content.label} — ${order.reference}`,
+    text: `Delife Kitchen · ${cuisineDescription}\n\nHi ${order.customerName},\n\n${message}\n\nOrder reference: ${order.reference}\nOrder status: ${status}\n${prepText(order) ? `${prepText(order)}\n` : ''}\n${helpText(help)}`,
     html: customerFrame(`
       <div style="background:#fff;max-width:620px;margin:0 auto;padding:30px;box-sizing:border-box;">
         <p style="color:#e95028;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Order ${escapeHtml(order.reference)}</p>
@@ -143,7 +150,7 @@ export const createStatusEmail = (order, status, help = {}) => {
         <p>${escapeHtml(message)}</p>
         ${prepText(order) ? `<p><strong>${escapeHtml(prepText(order))}</strong></p>` : ''}
         <p style="margin-top:28px;">${escapeHtml(helpText(help))}</p>
-      </div>`),
+      </div>`, branding),
     ...(help.helpEmail ? { replyTo: help.helpEmail } : {}),
   };
 };
