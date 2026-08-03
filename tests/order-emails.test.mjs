@@ -43,8 +43,9 @@ const createStore = () => {
 };
 
 test('customer and merchant paid emails include the required order details', () => {
-  const customer = createCustomerEmail({ ...order, status: 'paid' });
-  const merchant = createMerchantEmail({ ...order, status: 'paid' });
+  const branding = { logoUrl: 'https://example.com/assets/brand/delife-kitchen-logo.webp' };
+  const customer = createCustomerEmail({ ...order, status: 'paid' }, {}, branding);
+  const merchant = createMerchantEmail({ ...order, status: 'paid' }, branding);
 
   assert.match(customer.text, /Amara Okafor/);
   assert.match(customer.text, /DLK-TEST-7/);
@@ -54,7 +55,12 @@ test('customer and merchant paid emails include the required order details', () 
   assert.match(customer.text, /£25\.98/);
   assert.match(customer.text, /Order status: paid/);
   assert.match(customer.text, /Need help\?/);
+  assert.match(customer.text, /African and Caribbean Cuisine/);
+  assert.match(customer.html, /Delife Kitchen African and Caribbean Cuisine/);
+  assert.match(customer.html, /https:\/\/example\.com\/assets\/brand\/delife-kitchen-logo\.webp/);
+  assert.match(customer.html, /background:transparent/);
   assert.match(merchant.text, /07000 123456/);
+  assert.match(merchant.text, /African and Caribbean Cuisine/);
   assert.match(merchant.text, /Protein: Chicken/);
   assert.match(merchant.text, /Please ring the bell/);
 });

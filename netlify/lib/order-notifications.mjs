@@ -9,7 +9,9 @@ const getEmailConfiguration = () => {
   const merchantEmail = Netlify.env.get('ORDER_NOTIFICATION_EMAIL');
   const helpEmail = Netlify.env.get('ORDER_HELP_EMAIL') || merchantEmail;
   const helpPhone = Netlify.env.get('ORDER_HELP_PHONE');
-  return { apiKey, from, merchantEmail, help: { helpEmail, helpPhone } };
+  const siteUrl = Netlify.env.get('DEPLOY_PRIME_URL') || Netlify.env.get('URL');
+  const logoUrl = siteUrl ? new URL('/assets/brand/delife-kitchen-logo.webp', siteUrl).href : '';
+  return { apiKey, from, merchantEmail, help: { helpEmail, helpPhone }, branding: { logoUrl } };
 };
 
 const createDeliveryStore = database => ({
@@ -117,7 +119,7 @@ export const sendPaidOrderNotifications = async (order, providedDatabase) => {
         kind: 'merchant',
         statusKey: 'paid',
         recipient: configuration.merchantEmail,
-        email: createMerchantEmail(currentOrder),
+        email: createMerchantEmail(currentOrder, configuration.branding),
         configuration,
         database,
       });
@@ -127,7 +129,7 @@ export const sendPaidOrderNotifications = async (order, providedDatabase) => {
       kind: 'customer',
       statusKey: 'paid',
       recipient: currentOrder.customerEmail,
-      email: createCustomerEmail(currentOrder, configuration.help),
+      email: createCustomerEmail(currentOrder, configuration.help, configuration.branding),
       configuration,
       database,
     }),
@@ -147,7 +149,7 @@ export const sendCustomerStatusNotification = async (order, status = order.statu
     kind: 'customer',
     statusKey: status,
     recipient: order.customerEmail,
-    email: createStatusEmail(order, status, configuration.help),
+    email: createStatusEmail(order, status, configuration.help, configuration.branding),
     configuration,
     database,
   });
