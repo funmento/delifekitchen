@@ -29,13 +29,18 @@ export default async req => {
 
   const paidFilter = and(isNotNull(orders.paidAt), gte(orders.paidAt, from), lte(orders.paidAt, to));
   const [summaryRows, fulfilmentRows, dailyRows, statusRows] = await Promise.all([
-    db.select({ orderCount: count(), revenue: sum(orders.amountTotal) }).from(orders).where(paidFilter),
-    db.select({ fulfilment: orders.fulfilment, orderCount: count(), revenue: sum(orders.amountTotal) })
+    db.select({
+      orderCount: count(),
+      revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`),
+      foodRevenue: sum(sql`coalesce(${orders.orderSubtotalPence}, ${orders.amountTotal} - coalesce(${orders.deliveryFeePence}, 0))`),
+      deliveryFeeRevenue: sum(sql`coalesce(${orders.deliveryFeePence}, 0)`),
+    }).from(orders).where(paidFilter),
+    db.select({ fulfilment: orders.fulfilment, orderCount: count(), revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`) })
       .from(orders).where(paidFilter).groupBy(orders.fulfilment),
     db.select({
       day: sql`to_char(date_trunc('day', ${orders.paidAt}), 'YYYY-MM-DD')`,
       orderCount: count(),
-      revenue: sum(orders.amountTotal),
+      revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`),
     }).from(orders).where(paidFilter).groupBy(sql`date_trunc('day', ${orders.paidAt})`)
       .orderBy(asc(sql`date_trunc('day', ${orders.paidAt})`)),
     db.select({ status: orders.status, orderCount: count() }).from(orders).groupBy(orders.status),
@@ -43,6 +48,8 @@ export default async req => {
 
   const orderCount = Number(summaryRows[0]?.orderCount || 0);
   const revenue = Number(summaryRows[0]?.revenue || 0);
+  const foodRevenue = Number(summaryRows[0]?.foodRevenue || 0);
+  const deliveryFeeRevenue = Number(summaryRows[0]?.deliveryFeeRevenue || 0);
 
   return json({
     range: { from: from.toISOString(), to: to.toISOString() },
@@ -50,6 +57,9 @@ export default async req => {
     summary: {
       orderCount,
       revenue,
+      totalRevenue: revenue,
+      foodRevenue,
+      deliveryFeeRevenue,
       averageOrder: orderCount ? Math.round(revenue / orderCount) : 0,
     },
     fulfilment: fulfilmentRows.map(row => ({

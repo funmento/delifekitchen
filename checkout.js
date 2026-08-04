@@ -5,6 +5,8 @@ import './identity-flow.js';
 const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 const form = document.querySelector('#checkout-form');
 const itemContainer = document.querySelector('#order-items');
+const subtotalLabel = document.querySelector('#order-subtotal');
+const deliveryFeeLabel = document.querySelector('#delivery-fee');
 const totalLabel = document.querySelector('#order-total');
 const submitButton = document.querySelector('#checkout-submit');
 const errorBox = document.querySelector('#checkout-error');
@@ -14,8 +16,12 @@ const addressInput = form.elements.address;
 const postcodeInput = form.elements.postcode;
 const collectionTimeInput = form.elements.collectionTime;
 const fulfilmentStatus = document.querySelector('#fulfilment-status');
+const deliveryQuoteButton = document.querySelector('#delivery-quote-button');
+const deliveryQuoteStatus = document.querySelector('#delivery-quote-status');
 const fulfilmentInputs = [...form.elements.fulfilment];
 let orderingAvailable = true;
+let deliveryQuote = null;
+let quotePending = false;
 
 const requestedItem = new URLSearchParams(window.location.search).get('item');
 if (requestedItem && catalog[requestedItem]) {
@@ -41,9 +47,20 @@ let order = storedOrder.map(item => {
 
 writeCart(order.map(({ resolved, ...item }) => item), localStorage);
 
+const orderSubtotal = () => order.reduce((sum, item) => sum + item.resolved.unitAmount * item.quantity, 0);
+const selectedFulfilment = () => fulfilmentInputs.find(input => input.checked)?.value || '';
+const checkoutItems = () => order.map(item => ({ id: item.id, quantity: item.quantity, customizations: item.customizations }));
+
+const invalidateDeliveryQuote = (message = 'Enter your postcode to calculate delivery.') => {
+  deliveryQuote = null;
+  deliveryQuoteStatus.textContent = message;
+};
+
 const renderOrder = () => {
   if (!order.length) {
     itemContainer.innerHTML = '<div class="empty-order"><p>Your order is empty.</p><a href="menu.html">Choose from the menu</a></div>';
+    subtotalLabel.textContent = currency.format(0);
+    deliveryFeeLabel.textContent = currency.format(0);
     totalLabel.textContent = currency.format(0);
     submitButton.disabled = true;
     return;
@@ -65,9 +82,15 @@ const renderOrder = () => {
       </article>`;
   }).join('');
 
-  const total = order.reduce((sum, item) => sum + item.resolved.unitAmount * item.quantity, 0);
-  totalLabel.textContent = currency.format(total / 100);
-  submitButton.disabled = !orderingAvailable;
+  const localSubtotal = orderSubtotal();
+  const isDelivery = selectedFulfilment() === 'delivery';
+  const subtotal = deliveryQuote?.orderSubtotalPence ?? localSubtotal;
+  const deliveryFee = isDelivery ? deliveryQuote?.deliveryFeePence : 0;
+  const total = isDelivery ? deliveryQuote?.orderTotalPence : subtotal;
+  subtotalLabel.textContent = currency.format(subtotal / 100);
+  deliveryFeeLabel.textContent = Number.isInteger(deliveryFee) ? currency.format(deliveryFee / 100) : '—';
+  totalLabel.textContent = Number.isInteger(total) ? currency.format(total / 100) : '—';
+  submitButton.disabled = !orderingAvailable || quotePending || (isDelivery && !deliveryQuote);
 };
 
 itemContainer.addEventListener('click', event => {
@@ -76,6 +99,7 @@ itemContainer.addEventListener('click', event => {
   const itemElement = removeButton.closest('.order-item');
   order = order.filter(item => item.signature !== itemElement.dataset.signature);
   writeCart(order.map(({ resolved, ...item }) => item), localStorage);
+  if (selectedFulfilment() === 'delivery') invalidateDeliveryQuote('Basket changed. Recalculate delivery before payment.');
   renderOrder();
 });
 
@@ -86,7 +110,8 @@ const setFulfilment = value => {
   addressInput.required = isDelivery;
   postcodeInput.required = isDelivery;
   collectionTimeInput.required = !isDelivery;
-};
+  if (isDelivery) invalidateDeliveryQuote();
+  };
 
 const showFulfilmentStatus = message => {
   fulfilmentStatus.textContent = message;
@@ -130,13 +155,61 @@ const loadDeliverySettings = async () => {
   }
 };
 
-fulfilmentInputs.forEach(input => input.addEventListener('change', event => setFulfilment(event.target.value)));
+const requestDeliveryQuote = async () => {
+  if (!order.length || !postcodeInput.value.trim()) {
+    deliveryQuoteStatus.textContent = 'Enter your postcode to calculate delivery.';
+    return;
+  }
+
+  quotePending = true;
+  deliveryQuoteButton.disabled = true;
+  deliveryQuoteButton.textContent = 'Checking…';
+  deliveryQuoteStatus.textContent = 'Validating postcode and calculating the delivery fee…';
+  renderOrder();
+  try {
+    const response = await fetch('/api/delivery-quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fulfilment: 'delivery', postcode: postcodeInput.value, items: checkoutItems() }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Delivery could not be calculated.');
+    deliveryQuote = result;
+    postcodeInput.value = result.postcode || postcodeInput.value;
+    deliveryQuoteStatus.textContent = `${result.deliveryDistanceMiles.toFixed(1)} miles · ${result.deliveryPricingRule}`;
+  } catch (error) {
+    invalidateDeliveryQuote(error.message || 'Delivery could not be calculated.');
+  } finally {
+    quotePending = false;
+    deliveryQuoteButton.disabled = false;
+    deliveryQuoteButton.textContent = 'Check delivery & price';
+    renderOrder();
+  }
+};
+
+fulfilmentInputs.forEach(input => input.addEventListener('change', event => {
+  setFulfilment(event.target.value);
+  renderOrder();
+}));
+postcodeInput.addEventListener('input', () => {
+  invalidateDeliveryQuote('Postcode changed. Recalculate delivery before payment.');
+  renderOrder();
+});
+postcodeInput.addEventListener('blur', () => {
+  if (selectedFulfilment() === 'delivery' && postcodeInput.value.trim().length >= 5 && !deliveryQuote) requestDeliveryQuote();
+});
+deliveryQuoteButton.addEventListener('click', requestDeliveryQuote);
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
   errorBox.hidden = true;
 
   if (!form.reportValidity() || !order.length) return;
+  if (selectedFulfilment() === 'delivery' && !deliveryQuote) {
+    errorBox.textContent = 'Calculate delivery for this postcode before continuing to payment.';
+    errorBox.hidden = false;
+    return;
+  }
 
   submitButton.disabled = true;
   submitButton.classList.add('loading');
@@ -154,7 +227,7 @@ form.addEventListener('submit', async event => {
     postcode: formData.get('postcode'),
     collectionTime: formData.get('collectionTime'),
     notes: formData.get('notes'),
-    items: order.map(item => ({ id: item.id, quantity: item.quantity, customizations: item.customizations })),
+    items: checkoutItems(),
   };
 
   try {

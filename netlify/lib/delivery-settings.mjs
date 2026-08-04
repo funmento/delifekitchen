@@ -12,6 +12,12 @@ const fromRow = row => ({
   ...DEFAULT_DELIVERY_SETTINGS,
   ...row,
   deliveryRadiusMiles: Number(row?.deliveryRadiusMiles ?? DEFAULT_DELIVERY_SETTINGS.deliveryRadiusMiles),
+  baseDeliveryFeePence: Number(row?.baseDeliveryFeePence ?? DEFAULT_DELIVERY_SETTINGS.baseDeliveryFeePence),
+  includedBaseMiles: Number(row?.includedBaseMiles ?? DEFAULT_DELIVERY_SETTINGS.includedBaseMiles),
+  additionalMileFeePence: Number(row?.additionalMileFeePence ?? DEFAULT_DELIVERY_SETTINGS.additionalMileFeePence),
+  freeDeliveryThresholdPence: Number.isInteger(row?.freeDeliveryThresholdPence) ? row.freeDeliveryThresholdPence : null,
+  minimumDeliveryOrderPence: Number.isInteger(row?.minimumDeliveryOrderPence) ? row.minimumDeliveryOrderPence : null,
+  minimumCollectionOrderPence: Number.isInteger(row?.minimumCollectionOrderPence) ? row.minimumCollectionOrderPence : null,
   allowedPostcodePrefixes: normalizePostcodePrefixes(row?.allowedPostcodePrefixes ?? DEFAULT_DELIVERY_SETTINGS.allowedPostcodePrefixes),
 });
 
@@ -29,6 +35,16 @@ export const sanitizeDeliverySettings = input => {
   const unavailableMessage = typeof input?.deliveryUnavailableMessage === 'string'
     ? input.deliveryUnavailableMessage.trim().slice(0, 300)
     : '';
+  const positivePence = (value, fallback) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 && parsed <= 1_000_000 ? parsed : fallback;
+  };
+  const nullablePence = value => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 && parsed <= 1_000_000 ? parsed : null;
+  };
+  const includedBaseMiles = Number(input?.includedBaseMiles);
 
   return {
     deliveryEnabled: input?.deliveryEnabled === true,
@@ -38,6 +54,16 @@ export const sanitizeDeliverySettings = input => {
     deliveryRadiusMiles: Number.isFinite(radius) && radius > 0 && radius <= 100 ? Number(radius.toFixed(1)) : 15,
     allowedPostcodePrefixes: normalizePostcodePrefixes(input?.allowedPostcodePrefixes),
     deliveryUnavailableMessage: unavailableMessage || DEFAULT_DELIVERY_SETTINGS.deliveryUnavailableMessage,
+    deliveryFeeEnabled: input?.deliveryFeeEnabled !== false,
+    baseDeliveryFeePence: positivePence(input?.baseDeliveryFeePence, DEFAULT_DELIVERY_SETTINGS.baseDeliveryFeePence),
+    includedBaseMiles: Number.isFinite(includedBaseMiles) && includedBaseMiles >= 0 && includedBaseMiles <= 100
+      ? Number(includedBaseMiles.toFixed(1))
+      : DEFAULT_DELIVERY_SETTINGS.includedBaseMiles,
+    additionalMileFeePence: positivePence(input?.additionalMileFeePence, DEFAULT_DELIVERY_SETTINGS.additionalMileFeePence),
+    freeDeliveryEnabled: input?.freeDeliveryEnabled === true,
+    freeDeliveryThresholdPence: nullablePence(input?.freeDeliveryThresholdPence),
+    minimumDeliveryOrderPence: nullablePence(input?.minimumDeliveryOrderPence),
+    minimumCollectionOrderPence: nullablePence(input?.minimumCollectionOrderPence),
   };
 };
 

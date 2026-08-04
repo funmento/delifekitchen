@@ -14,6 +14,14 @@ export const DEFAULT_DELIVERY_SETTINGS = Object.freeze({
   deliveryRadiusMiles: 15,
   allowedPostcodePrefixes: DEFAULT_ALLOWED_POSTCODE_PREFIXES,
   deliveryUnavailableMessage: 'Delivery is currently unavailable. Collection is still available.',
+  deliveryFeeEnabled: true,
+  baseDeliveryFeePence: 300,
+  includedBaseMiles: 1,
+  additionalMileFeePence: 150,
+  freeDeliveryEnabled: false,
+  freeDeliveryThresholdPence: null,
+  minimumDeliveryOrderPence: null,
+  minimumCollectionOrderPence: null,
 });
 
 export const normalizeUkPostcode = value => {
@@ -114,12 +122,13 @@ export const validateDeliveryPostcode = async (postcode, settings, options = {})
     }
   }
 
+  const base = await lookupUkPostcode(settings.baseDeliveryPostcode, options);
+  if (!base.ok) {
+    return rejected('base-postcode-unavailable', 'Delivery distance is temporarily unavailable. Please choose collection or try again later.');
+  }
+  const distance = distanceMiles(base, customer);
+
   if (settings.deliveryRestrictionMode === 'radius') {
-    const base = await lookupUkPostcode(settings.baseDeliveryPostcode, options);
-    if (!base.ok) {
-      return rejected('base-postcode-unavailable', 'Delivery distance is temporarily unavailable. Please choose collection or try again later.');
-    }
-    const distance = distanceMiles(base, customer);
     if (distance > Number(settings.deliveryRadiusMiles)) {
       return rejected('outside-delivery-area', 'Sorry, delivery is currently only available within our delivery area.', {
         postcode: customer.postcode,
@@ -138,7 +147,7 @@ export const validateDeliveryPostcode = async (postcode, settings, options = {})
   return {
     allowed: true,
     postcode: customer.postcode,
-    distanceMiles: null,
+    distanceMiles: Number(distance.toFixed(1)),
     restrictionMode: settings.deliveryRestrictionMode,
     validationResult: 'accepted',
   };

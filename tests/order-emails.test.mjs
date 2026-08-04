@@ -13,9 +13,14 @@ const order = {
   fulfilment: 'delivery',
   deliveryAddress: '14 Market Lane',
   postcode: 'NG1 1AA',
+  deliveryDistanceMiles: 3.7,
+  deliveryFeePence: 750,
+  deliveryPricingRule: '£3.00 includes 1 mile, then £1.50 per additional mile (rounded up)',
+  orderSubtotalPence: 2598,
+  orderTotalPence: 3348,
   notes: 'Please ring the bell',
   currency: 'gbp',
-  amountTotal: 2598,
+  amountTotal: 3348,
   estimatedPrepMinutes: 25,
   items: [{
     id: 'jollof-rice',
@@ -52,7 +57,10 @@ test('customer and merchant paid emails include the required order details', () 
   assert.match(customer.text, /Jollof rice/);
   assert.match(customer.text, /Delivery/);
   assert.match(customer.text, /14 Market Lane/);
-  assert.match(customer.text, /£25\.98/);
+  assert.match(customer.text, /Item subtotal: £25\.98/);
+  assert.match(customer.text, /Delivery fee: £7\.50/);
+  assert.match(customer.text, /Total paid: £33\.48/);
+  assert.match(customer.text, /Delivery distance: 3\.7 miles/);
   assert.match(customer.text, /Order status: paid/);
   assert.match(customer.text, /Need help\?/);
   assert.match(customer.text, /African and Caribbean Cuisine/);
@@ -63,12 +71,14 @@ test('customer and merchant paid emails include the required order details', () 
   assert.match(merchant.text, /African and Caribbean Cuisine/);
   assert.match(merchant.text, /Protein: Chicken/);
   assert.match(merchant.text, /Please ring the bell/);
+  assert.match(merchant.text, /Delivery fee: £7\.50/);
 });
 
 test('preparing status email includes estimated preparation time', () => {
   const email = createStatusEmail(order, 'preparing');
   assert.match(email.text, /Estimated preparation time: 25 minutes\./);
   assert.match(email.html, /Estimated preparation time: 25 minutes\./);
+  assert.match(email.text, /Delivery fee: £7\.50/);
 });
 
 test('paid notification attempts customer delivery when merchant delivery fails', async () => {

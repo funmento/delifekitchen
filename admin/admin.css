@@ -506,6 +506,7 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .rule-fields label { display: grid; gap: 9px; color: var(--ink); font-size: .76rem; font-weight: 800; }
 .rule-fields input, .rule-fields textarea { width: 100%; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--ink); padding: 13px 14px; font: inherit; font-weight: 500; resize: vertical; }
 .rule-fields input:focus, .rule-fields textarea:focus { border-color: var(--green); outline: 3px solid rgba(38, 78, 58, .12); }
+.pricing-fields { margin: 0 24px 24px; }
 .settings-actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 8px 2px 30px; }
 .settings-actions p { margin: 0; color: var(--muted); font-size: .75rem; }
 
@@ -515,3 +516,4 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .toggle-grid, .restriction-options, .rule-fields { grid-template-columns: 1fr; }
   .settings-actions { align-items: stretch; flex-direction: column; }
 }
+.order-breakdown{border-top:1px solid var(--line);display:grid;gap:8px;margin:18px 0 0;padding-top:16px}.order-breakdown div{display:flex;justify-content:space-between}.order-breakdown dt,.order-breakdown dd{margin:0}.order-breakdown dt{color:var(--muted);font-size:.76rem}.order-breakdown dd{font-weight:800}.order-breakdown div:last-child{font-size:1rem;padding-top:5px}

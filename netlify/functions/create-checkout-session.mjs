@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { customizationSignature, customizationSummary } from '../lib/catalog.mjs';
-import { resolveProductCustomizations } from '../lib/product-validation.mjs';
+import { customizationSummary } from '../lib/catalog.mjs';
 import { validateDeliveryPostcode, validateFulfilmentAvailability } from '../lib/delivery-rules.mjs';
+import { calculateOrderPricing, resolveCheckoutItems } from '../lib/order-pricing.mjs';
 
 const clean = (value, maxLength) => typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 const addMetadata = (params, metadata) => {
@@ -97,58 +97,17 @@ export const createCheckoutSessionHandler = ({
     activeOrdersTable ||= schemaModule.orders;
   }
 
-  let databaseProducts;
-  try {
-    databaseProducts = await loadProducts(activeDatabase, [...new Set(items.map(item => clean(item?.id, 80)).filter(Boolean))]);
-  } catch (error) {
-    console.error('Checkout product load failed', error instanceof Error ? error.name : 'UnknownError');
-    return Response.json({ error: 'Current product prices could not be checked. Please try again.' }, { status: 503 });
-  }
-  const productsBySlug = new Map(databaseProducts.map(product => [product.slug, product]));
-
-  const validatedItems = items.map(item => {
-    const id = clean(item?.id, 80);
-    const quantity = Number(item?.quantity);
-    const submittedUnitAmount = Number(item?.unitAmount);
-    const customizations = Array.isArray(item?.customizations)
-      ? item.customizations.slice(0, 20).map(group => ({
-        groupId: clean(group?.groupId, 80),
-        selectionIds: Array.isArray(group?.selectionIds) ? group.selectionIds.slice(0, 20).map(selection => clean(selection, 80)) : [],
-      }))
-      : [];
-    const product = productsBySlug.get(id);
-    const resolved = resolveProductCustomizations(product, customizations);
-    return { id, quantity, submittedUnitAmount, customizations, product, resolved };
-  }).filter(item => item.product && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 20 && item.resolved.valid);
-
-  if (!validatedItems.length || validatedItems.length !== items.length) {
-    return Response.json({ error: 'Your order contains an invalid item. Please return to the menu and try again.' }, { status: 400 });
-  }
-  if (validatedItems.some(item => Number.isInteger(item.submittedUnitAmount) && item.submittedUnitAmount !== item.resolved.unitAmount)) {
-    return Response.json({ error: 'A product price or option has changed. Please review your basket before payment.' }, { status: 409 });
-  }
-
-  const consolidatedItems = [...validatedItems.reduce((itemsBySignature, item) => {
-    const signature = customizationSignature(item.id, item.resolved.selections);
-    const existing = itemsBySignature.get(signature);
-    if (existing) existing.quantity += item.quantity;
-    else itemsBySignature.set(signature, { ...item, signature });
-    return itemsBySignature;
-  }, new Map()).values()];
-
-  if (consolidatedItems.some(item => item.quantity > 20)) {
-    return Response.json({ error: 'An item quantity is too high. Please reduce it and try again.' }, { status: 400 });
-  }
-
-  const orderItems = consolidatedItems.map(item => ({
-    id: item.id,
-    name: item.product.name,
-    quantity: item.quantity,
-    unitAmount: item.resolved.unitAmount,
-    lineTotal: item.resolved.unitAmount * item.quantity,
-    customizations: item.resolved.selections,
-  }));
-  const amountTotal = orderItems.reduce((total, item) => total + item.lineTotal, 0);
+  const resolvedItems = await resolveCheckoutItems({ rawItems: items, database: activeDatabase, loadProducts });
+  if (!resolvedItems.ok) return Response.json({ error: resolvedItems.error }, { status: resolvedItems.status });
+  const { orderItems, subtotalPence } = resolvedItems;
+  const pricing = calculateOrderPricing({
+    fulfilment,
+    subtotalPence,
+    distanceMiles: deliveryValidation?.distanceMiles,
+    settings: deliverySettings,
+  });
+  if (!pricing.ok) return Response.json({ error: pricing.error }, { status: pricing.status });
+  const amountTotal = pricing.totalPence;
   const orderReference = createOrderReference();
 
   try {
@@ -163,6 +122,10 @@ export const createCheckoutSessionHandler = ({
       deliveryValidationResult: fulfilment === 'delivery' ? deliveryValidation.validationResult : null,
       deliveryDistanceMiles: fulfilment === 'delivery' ? deliveryValidation.distanceMiles : null,
       deliveryRestrictionMode: fulfilment === 'delivery' ? deliveryValidation.restrictionMode : null,
+      deliveryFeePence: pricing.deliveryFeePence,
+      deliveryPricingRule: pricing.pricingRule,
+      orderSubtotalPence: pricing.subtotalPence,
+      orderTotalPence: pricing.totalPence,
       notes: [
         fulfilment === 'collection' ? `Preferred collection time: ${collectionTime}` : '',
         notes,
@@ -202,6 +165,14 @@ export const createCheckoutSessionHandler = ({
     if (summary) params.set(`line_items[${index}][price_data][product_data][description]`, summary.slice(0, 500));
     params.set(`line_items[${index}][quantity]`, String(item.quantity));
   });
+  if (pricing.deliveryFeePence > 0) {
+    const index = orderItems.length;
+    params.set(`line_items[${index}][price_data][currency]`, 'gbp');
+    params.set(`line_items[${index}][price_data][unit_amount]`, String(pricing.deliveryFeePence));
+    params.set(`line_items[${index}][price_data][product_data][name]`, 'Delivery');
+    params.set(`line_items[${index}][price_data][product_data][description]`, pricing.pricingRule.slice(0, 500));
+    params.set(`line_items[${index}][quantity]`, '1');
+  }
 
   const metadata = {
     order_reference: orderReference,
@@ -213,7 +184,11 @@ export const createCheckoutSessionHandler = ({
     postcode: fulfilment === 'delivery' ? deliveryValidation.postcode : 'Not applicable (collection)',
     preferred_collection_time: fulfilment === 'collection' ? collectionTime : 'Not applicable (delivery)',
     special_instructions_allergies: notes || 'None provided',
-    total_price: `${(amountTotal / 100).toFixed(2)} GBP`,
+    item_subtotal_pence: String(pricing.subtotalPence),
+    delivery_fee_pence: String(pricing.deliveryFeePence),
+    delivery_distance_miles: fulfilment === 'delivery' ? String(deliveryValidation.distanceMiles) : 'Not applicable (collection)',
+    delivery_pricing_rule: pricing.pricingRule,
+    total_price: `${(pricing.totalPence / 100).toFixed(2)} GBP`,
     total_price_pence: String(amountTotal),
     order_summary: orderItems.map(item => `${item.quantity}x ${item.name} (${customizationSummary(item.customizations)})`).join('; ').slice(0, 500),
   };
