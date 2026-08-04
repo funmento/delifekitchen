@@ -72,6 +72,8 @@ const longDate = value => new Intl.DateTimeFormat('en-GB', {
 }).format(new Date(value));
 
 const dateInputValue = date => date.toISOString().slice(0, 10);
+const pounds = pence => Number.isInteger(pence) ? (pence / 100).toFixed(2) : '';
+const pence = value => value === '' || value === null ? null : Math.round(Number(value) * 100);
 const titleCase = value => value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : '';
 
 const showNotice = (element, message, error = false) => {
@@ -183,6 +185,14 @@ const renderDeliverySettings = settings => {
   form.deliveryRadiusMiles.value = settings.deliveryRadiusMiles;
   form.allowedPostcodePrefixes.value = settings.allowedPostcodePrefixes.join(', ');
   form.deliveryUnavailableMessage.value = settings.deliveryUnavailableMessage;
+  form.deliveryFeeEnabled.checked = settings.deliveryFeeEnabled;
+  form.baseDeliveryFeePounds.value = pounds(settings.baseDeliveryFeePence);
+  form.includedBaseMiles.value = settings.includedBaseMiles;
+  form.additionalMileFeePounds.value = pounds(settings.additionalMileFeePence);
+  form.freeDeliveryEnabled.checked = settings.freeDeliveryEnabled;
+  form.freeDeliveryThresholdPounds.value = pounds(settings.freeDeliveryThresholdPence);
+  form.minimumDeliveryOrderPounds.value = pounds(settings.minimumDeliveryOrderPence);
+  form.minimumCollectionOrderPounds.value = pounds(settings.minimumCollectionOrderPence);
   elements.activeDeliveryRule.textContent = settings.orderingDisabled ? 'Online ordering is temporarily disabled.' : settings.activeRule;
   elements.settingsUpdatedAt.textContent = settings.updatedAt ? `Last updated ${longDate(settings.updatedAt)}` : '';
   setRestrictionFields(settings.deliveryRestrictionMode);
@@ -222,6 +232,14 @@ const saveDeliverySettings = async event => {
         deliveryRadiusMiles: formData.get('deliveryRadiusMiles'),
         allowedPostcodePrefixes: formData.get('allowedPostcodePrefixes'),
         deliveryUnavailableMessage: formData.get('deliveryUnavailableMessage'),
+        deliveryFeeEnabled: formData.get('deliveryFeeEnabled') === 'on',
+        baseDeliveryFeePence: pence(formData.get('baseDeliveryFeePounds')),
+        includedBaseMiles: formData.get('includedBaseMiles'),
+        additionalMileFeePence: pence(formData.get('additionalMileFeePounds')),
+        freeDeliveryEnabled: formData.get('freeDeliveryEnabled') === 'on',
+        freeDeliveryThresholdPence: pence(formData.get('freeDeliveryThresholdPounds')),
+        minimumDeliveryOrderPence: pence(formData.get('minimumDeliveryOrderPounds')),
+        minimumCollectionOrderPence: pence(formData.get('minimumCollectionOrderPounds')),
         confirmOrderingDisabled,
       }),
     });
@@ -458,7 +476,7 @@ const createOrderCard = order => {
 
   const amount = document.createElement('strong');
   amount.className = 'order-amount';
-  amount.textContent = money(order.amountTotal, order.currency);
+  amount.textContent = money(order.orderTotalPence ?? order.amountTotal, order.currency);
   const pill = createStatusPill(order.status);
   const toggle = document.createElement('button');
   toggle.className = 'icon-button order-toggle';
@@ -501,7 +519,22 @@ const createOrderCard = order => {
     row.append(quantity, copy, total);
     itemList.append(row);
   });
-  itemsSection.append(itemsTitle, itemList);
+  const totals = document.createElement('dl');
+  totals.className = 'order-breakdown';
+  [
+    ['Item subtotal', order.orderSubtotalPence ?? order.items.reduce((sum, item) => sum + item.lineTotal, 0)],
+    ['Delivery fee', order.deliveryFeePence ?? 0],
+    ['Final total', order.orderTotalPence ?? order.amountTotal],
+  ].forEach(([label, value]) => {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const amountValue = document.createElement('dd');
+    term.textContent = label;
+    amountValue.textContent = money(value, order.currency);
+    row.append(term, amountValue);
+    totals.append(row);
+  });
+  itemsSection.append(itemsTitle, itemList, totals);
 
   const detailsSection = document.createElement('section');
   const detailsTitle = document.createElement('h3');
@@ -516,6 +549,7 @@ const createOrderCard = order => {
     ['Delivery validation', order.deliveryValidationResult ? titleCase(order.deliveryValidationResult) : '—'],
     ['Delivery rule', order.deliveryRestrictionMode ? titleCase(order.deliveryRestrictionMode) : '—'],
     ['Delivery distance', Number.isFinite(order.deliveryDistanceMiles) ? `${order.deliveryDistanceMiles.toFixed(1)} miles` : '—'],
+    ['Delivery pricing', order.deliveryPricingRule || '—'],
     ['Notes', order.notes || '—'],
     ['Paid', order.paidAt ? longDate(order.paidAt) : 'Not yet'],
     ['Prep time', order.estimatedPrepMinutes ? `${order.estimatedPrepMinutes} minutes` : 'Not set'],

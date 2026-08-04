@@ -52,6 +52,10 @@
           <div id="delivery-fields" class="delivery-fields" hidden>
             <label class="field"><span>Delivery address *</span><textarea name="address" autocomplete="street-address" rows="3" maxlength="300"></textarea></label>
             <label class="field"><span>Postcode *</span><input type="text" name="postcode" autocomplete="postal-code" maxlength="20" /></label>
+            <div class="delivery-quote-actions">
+              <button id="delivery-quote-button" type="button">Check delivery &amp; price</button>
+              <p id="delivery-quote-status" role="status">Enter your postcode to calculate delivery.</p>
+            </div>
           </div>
 
           <div id="collection-fields" class="delivery-fields collection-fields">
@@ -63,7 +67,11 @@
           <div class="order-review">
             <div class="order-review-title"><span>02</span><h2>Your order</h2><a href="menu.html">Edit order</a></div>
             <div id="order-items" class="order-items"></div>
-            <div class="order-total"><span>Total</span><strong id="order-total">£0.00</strong></div>
+            <dl class="order-totals">
+              <div><dt>Item subtotal</dt><dd id="order-subtotal">£0.00</dd></div>
+              <div><dt>Delivery fee</dt><dd id="delivery-fee">£0.00</dd></div>
+              <div class="order-total"><dt>Total</dt><dd id="order-total">£0.00</dd></div>
+            </dl>
           </div>
 
           <div id="checkout-error" class="checkout-error" role="alert" hidden></div>

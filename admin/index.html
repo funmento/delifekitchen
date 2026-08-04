@@ -280,6 +280,28 @@
             </div>
           </section>
 
+          <section class="panel settings-panel">
+            <header class="panel-header"><div><p class="eyebrow">Delivery pricing</p><h2>Set distance-based charges</h2></div></header>
+            <div class="settings-grid toggle-grid">
+              <label class="setting-toggle">
+                <span><strong>Delivery fee enabled</strong><small>Add a delivery line to eligible delivery orders.</small></span>
+                <input type="checkbox" name="deliveryFeeEnabled"><i aria-hidden="true"></i>
+              </label>
+              <label class="setting-toggle">
+                <span><strong>Free delivery enabled</strong><small>Waive the fee when the item subtotal reaches the threshold.</small></span>
+                <input type="checkbox" name="freeDeliveryEnabled"><i aria-hidden="true"></i>
+              </label>
+            </div>
+            <div class="settings-grid rule-fields pricing-fields">
+              <label><span>Base delivery fee</span><input type="number" name="baseDeliveryFeePounds" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="3.00" required><small>Charged for the included base miles.</small></label>
+              <label><span>Included base miles</span><input type="number" name="includedBaseMiles" min="0" max="100" step="0.1" inputmode="decimal" placeholder="1" required></label>
+              <label><span>Additional mile fee</span><input type="number" name="additionalMileFeePounds" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="1.50" required><small>Additional miles are rounded up.</small></label>
+              <label><span>Free delivery threshold</span><input type="number" name="freeDeliveryThresholdPounds" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="No threshold"><small>Leave empty while free delivery is disabled.</small></label>
+              <label><span>Minimum delivery order</span><input type="number" name="minimumDeliveryOrderPounds" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="No minimum"></label>
+              <label><span>Minimum collection order</span><input type="number" name="minimumCollectionOrderPounds" min="0" max="10000" step="0.01" inputmode="decimal" placeholder="No minimum"></label>
+            </div>
+          </section>
+
           <div class="settings-actions">
             <p>Postcodes are validated using Postcodes.io before Stripe checkout opens.</p>
             <button class="button button-primary" id="save-delivery-settings" type="submit">Save delivery settings</button>

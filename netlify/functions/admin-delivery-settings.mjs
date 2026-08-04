@@ -36,6 +36,9 @@ export default async req => {
     if (settings.deliveryRestrictionMode === 'prefixes' && !settings.allowedPostcodePrefixes.length) {
       return json({ error: 'Add at least one allowed postcode prefix.' }, { status: 400 });
     }
+    if (settings.freeDeliveryEnabled && !Number.isInteger(settings.freeDeliveryThresholdPence)) {
+      return json({ error: 'Enter a free delivery threshold or turn free delivery off.' }, { status: 400 });
+    }
 
     return json({ settings: serialize(await saveDeliverySettings(settings)) });
   } catch (error) {
