@@ -1,4 +1,5 @@
-import { boolean, index, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, index, integer, jsonb, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export type OrderItem = {
   id: string;
@@ -119,6 +120,8 @@ export const products = pgTable("products", {
   fullDescription: text("full_description").notNull().default(""),
   price: integer().notNull(),
   imageUrl: text("image_url").notNull().default(""),
+  imageFocalX: integer("image_focal_x").notNull().default(50),
+  imageFocalY: integer("image_focal_y").notNull().default(50),
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
   active: boolean().notNull().default(true),
   soldOut: boolean("sold_out").notNull().default(false),
@@ -129,6 +132,8 @@ export const products = pgTable("products", {
 }, table => [
   index("products_category_sort_idx").on(table.categoryId, table.sortOrder),
   index("products_active_sold_out_idx").on(table.active, table.soldOut),
+  check("products_image_focal_x_range", sql`${table.imageFocalX} between 0 and 100`),
+  check("products_image_focal_y_range", sql`${table.imageFocalY} between 0 and 100`),
 ]);
 
 export const productOptionGroups = pgTable("product_option_groups", {

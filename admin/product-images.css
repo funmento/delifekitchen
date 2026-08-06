@@ -1,0 +1,128 @@
+.product-row img {
+  aspect-ratio: 1;
+  display: block;
+  object-fit: cover;
+}
+
+.image-preview {
+  min-width: 0;
+}
+
+.image-editor {
+  grid-template-columns: minmax(180px, 220px) 1fr;
+}
+
+.image-preview img {
+  background: #eee8dc;
+  border: 0;
+  border-radius: 0;
+  height: 100%;
+  inset: 0;
+  object-fit: cover;
+  position: absolute;
+  user-select: none;
+  width: 100%;
+}
+
+.image-preview-stage {
+  aspect-ratio: 7 / 8;
+  background: #eee8dc;
+  border: 1px solid rgba(42, 35, 25, .12);
+  border-radius: 12px;
+  cursor: crosshair;
+  display: block;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  width: min(100%, 220px);
+}
+
+.image-preview-stage:focus-visible {
+  outline: 3px solid var(--terracotta);
+  outline-offset: 3px;
+}
+
+.focal-marker {
+  border: 2px solid #fffdf7;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(42, 35, 25, .72), 0 3px 12px rgba(42, 35, 25, .28);
+  height: 22px;
+  left: 50%;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+}
+
+.focal-marker::before,
+.focal-marker::after {
+  background: #fffdf7;
+  box-shadow: 0 0 0 1px rgba(42, 35, 25, .65);
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.focal-marker::before { height: 2px; width: 30px; }
+.focal-marker::after { height: 30px; width: 2px; }
+
+.focal-editor {
+  border-bottom: 1px solid rgba(42, 35, 25, .12);
+  border-top: 1px solid rgba(42, 35, 25, .12);
+  padding: 16px 0;
+}
+
+.focal-heading {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.focal-heading p {
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+
+.focal-control-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.focal-control-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.focal-control-grid label > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.focal-control-grid output {
+  color: var(--terracotta);
+  font-variant-numeric: tabular-nums;
+}
+
+.focal-control-grid input[type="range"] {
+  accent-color: var(--terracotta);
+  cursor: ew-resize;
+  padding: 0;
+}
+
+@media (max-width: 720px) {
+  .image-editor { grid-template-columns: 1fr; }
+
+  .image-preview-stage {
+    width: 100%;
+  }
+
+  .focal-control-grid { grid-template-columns: 1fr; }
+}

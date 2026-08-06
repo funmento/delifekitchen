@@ -4,12 +4,19 @@
 }
 
 .menu-card-link {
+  aspect-ratio: 11 / 10;
+  background: #ddd3c3;
   display: block;
   overflow: hidden;
 }
 
 .menu-card-link img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
   transition: transform 0.55s cubic-bezier(.2, .7, .2, 1);
+  width: 100%;
 }
 
 .menu-card-link:hover img,
