@@ -1,3 +1,5 @@
+import { clampImageFocalPoint, productImagePosition } from '/image-focal.mjs';
+
 const state = { products: [], categories: [], selected: null };
 const $ = selector => document.querySelector(selector);
 const fallbackImage = '/assets/brand/delife-kitchen-icon.png';
@@ -18,6 +20,18 @@ const notice = (message, error = false) => {
   setTimeout(() => node.hidden = true, 5000);
 };
 const categories = () => state.categories.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+const setFocalPoint = (x, y) => {
+  const focalX = clampImageFocalPoint(x);
+  const focalY = clampImageFocalPoint(y);
+  const form = $('#product-form');
+  form.elements.imageFocalX.value = focalX;
+  form.elements.imageFocalY.value = focalY;
+  $('#focal-x-output').textContent = `${focalX}%`;
+  $('#focal-y-output').textContent = `${focalY}%`;
+  $('#image-preview').style.objectPosition = `${focalX}% ${focalY}%`;
+  $('#focal-marker').style.left = `${focalX}%`;
+  $('#focal-marker').style.top = `${focalY}%`;
+};
 const setImagePreview = (url, label = 'Current image') => {
   const preview = $('#image-preview');
   preview.src = url || fallbackImage;
@@ -32,7 +46,7 @@ const refreshSelects = () => {
 const renderProducts = () => {
   const query = $('#search').value.toLowerCase();
   const filtered = state.products.filter(product => (!query || `${product.name} ${product.slug}`.toLowerCase().includes(query)) && (!$('#category-filter').value || String(product.categoryId) === $('#category-filter').value) && (!$('#active-filter').value || String(product.active) === $('#active-filter').value) && (!$('#stock-filter').value || String(product.soldOut) === $('#stock-filter').value));
-  $('#product-list').innerHTML = filtered.length ? filtered.map(product => `<article class="product-row"><img src="${escape(product.imageUrl || fallbackImage)}" alt=""><div><h3>${escape(product.name)}</h3><div class="product-meta"><span>${escape(product.category?.name || 'Uncategorised')}</span><strong>${money(product.price)}</strong><span>Order ${product.sortOrder}</span></div><div class="status-line"><span class="status ${product.active ? '' : 'off'}">${product.active ? 'Active' : 'Hidden'}</span>${product.soldOut ? '<span class="status sold">Sold out</span>' : '<span class="status">In stock</span>'}</div></div><button class="button button-secondary" data-edit-product="${product.id}" type="button">Edit</button></article>`).join('') : '<div class="empty-state">No products match these filters.</div>';
+  $('#product-list').innerHTML = filtered.length ? filtered.map(product => `<article class="product-row"><img src="${escape(product.imageUrl || fallbackImage)}" alt="" style="object-position:${productImagePosition(product)}"><div><h3>${escape(product.name)}</h3><div class="product-meta"><span>${escape(product.category?.name || 'Uncategorised')}</span><strong>${money(product.price)}</strong><span>Order ${product.sortOrder}</span></div><div class="status-line"><span class="status ${product.active ? '' : 'off'}">${product.active ? 'Active' : 'Hidden'}</span>${product.soldOut ? '<span class="status sold">Sold out</span>' : '<span class="status">In stock</span>'}</div></div><button class="button button-secondary" data-edit-product="${product.id}" type="button">Edit</button></article>`).join('') : '<div class="empty-state">No products match these filters.</div>';
 };
 const renderCategories = () => {
   $('#category-list').innerHTML = categories().map(category => `<div class="category-row"><div><strong>${escape(category.name)}</strong><div class="product-meta">${escape(category.slug)} · order ${category.sortOrder} · ${category.active ? 'visible' : 'hidden'}</div></div><button class="mini-button" data-edit-category="${category.id}">Edit</button></div>`).join('');
@@ -52,6 +66,7 @@ const editProduct = product => {
   form.active.checked = product?.active ?? true;
   form.soldOut.checked = product?.soldOut ?? false;
   form.featured.checked = product?.featured ?? false;
+  setFocalPoint(product?.imageFocalX, product?.imageFocalY);
   $('#editor-title').textContent = product ? 'Edit product' : 'Add a product';
   setImagePreview(product?.imageUrl, product?.imageUrl ? 'Current product image' : 'No image selected');
   renderOptions(product);
@@ -132,6 +147,8 @@ $('#product-form').addEventListener('submit', async event => {
   body.price = Math.round(Number(body.price) * 100);
   body.categoryId = body.categoryId ? Number(body.categoryId) : null;
   body.sortOrder = Number(body.sortOrder);
+  body.imageFocalX = clampImageFocalPoint(body.imageFocalX);
+  body.imageFocalY = clampImageFocalPoint(body.imageFocalY);
   body.active = event.currentTarget.active.checked;
   body.soldOut = event.currentTarget.soldOut.checked;
   body.featured = event.currentTarget.featured.checked;
@@ -169,6 +186,40 @@ $('#image-file').addEventListener('change', async event => {
   }
 });
 $('#product-form').elements.imageUrl.addEventListener('input', event => setImagePreview(event.target.value, event.target.value ? 'Image URL preview' : 'No image selected'));
+$('#image-focal-x').addEventListener('input', event => setFocalPoint(event.target.value, $('#image-focal-y').value));
+$('#image-focal-y').addEventListener('input', event => setFocalPoint($('#image-focal-x').value, event.target.value));
+$('#reset-focal-point').addEventListener('click', () => setFocalPoint(50, 50));
+const previewStage = $('#image-preview-stage');
+let draggingFocalPoint = false;
+const setFocalPointFromPointer = event => {
+  const bounds = previewStage.getBoundingClientRect();
+  setFocalPoint(((event.clientX - bounds.left) / bounds.width) * 100, ((event.clientY - bounds.top) / bounds.height) * 100);
+};
+previewStage.addEventListener('pointerdown', event => {
+  draggingFocalPoint = true;
+  previewStage.setPointerCapture(event.pointerId);
+  setFocalPointFromPointer(event);
+});
+previewStage.addEventListener('pointermove', event => {
+  if (draggingFocalPoint) setFocalPointFromPointer(event);
+});
+previewStage.addEventListener('pointerup', event => {
+  draggingFocalPoint = false;
+  previewStage.releasePointerCapture(event.pointerId);
+});
+previewStage.addEventListener('pointercancel', () => { draggingFocalPoint = false; });
+previewStage.addEventListener('keydown', event => {
+  const movement = event.shiftKey ? 10 : 1;
+  const x = Number($('#image-focal-x').value);
+  const y = Number($('#image-focal-y').value);
+  const next = {
+    ArrowLeft: [x - movement, y], ArrowRight: [x + movement, y],
+    ArrowUp: [x, y - movement], ArrowDown: [x, y + movement],
+  }[event.key];
+  if (!next) return;
+  event.preventDefault();
+  setFocalPoint(...next);
+});
 document.addEventListener('click', async event => {
   try {
     const productId = event.target.dataset.editProduct;

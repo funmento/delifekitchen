@@ -1,3 +1,5 @@
+import { clampImageFocalPoint } from '../../image-focal.mjs';
+
 const slugify = value => String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80);
 
 export const resolveProductCustomizations = (product, rawGroups) => {
@@ -20,6 +22,7 @@ export const productInput = body => ({
   slug: slugify(body.slug || body.name), name: String(body.name || '').trim().slice(0, 160),
   shortDescription: String(body.shortDescription || '').trim().slice(0, 500), fullDescription: String(body.fullDescription || '').trim().slice(0, 5000),
   price: Math.max(0, Math.round(Number(body.price) || 0)), imageUrl: String(body.imageUrl || '').trim().slice(0, 1000),
+  imageFocalX: clampImageFocalPoint(body.imageFocalX), imageFocalY: clampImageFocalPoint(body.imageFocalY),
   categoryId: Number.isInteger(Number(body.categoryId)) ? Number(body.categoryId) : null,
   active: body.active !== false, soldOut: body.soldOut === true, featured: body.featured === true,
   sortOrder: Math.round(Number(body.sortOrder) || 0), updatedAt: new Date(),

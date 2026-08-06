@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { clampImageFocalPoint, productImagePosition } from '../image-focal.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createCheckoutSessionHandler } from '../netlify/functions/create-checkout-session.mjs';
@@ -12,13 +13,25 @@ const product = overrides => ({
 });
 
 test('product input supports creation, editing, hiding, stock and price changes', () => {
-  const values = productInput({ name: 'New Dish', slug: 'New Dish', price: 1599, active: false, soldOut: true, featured: true, sortOrder: 25 });
+  const values = productInput({ name: 'New Dish', slug: 'New Dish', price: 1599, active: false, soldOut: true, featured: true, sortOrder: 25, imageFocalX: 38, imageFocalY: 72 });
   assert.equal(values.slug, 'new-dish');
   assert.equal(values.price, 1599);
   assert.equal(values.active, false);
   assert.equal(values.soldOut, true);
   assert.equal(values.featured, true);
   assert.equal(values.sortOrder, 25);
+  assert.equal(values.imageFocalX, 38);
+  assert.equal(values.imageFocalY, 72);
+});
+
+test('product image focal points use safe centered defaults and bounded percentages', () => {
+  assert.equal(clampImageFocalPoint(undefined), 50);
+  assert.equal(clampImageFocalPoint(-25), 0);
+  assert.equal(clampImageFocalPoint(145), 100);
+  assert.equal(productImagePosition({ imageFocalX: 32.6, imageFocalY: 68.2 }), '33% 68%');
+  const values = productInput({ name: 'New Dish', price: 1599, imageFocalX: -20, imageFocalY: 120 });
+  assert.equal(values.imageFocalX, 0);
+  assert.equal(values.imageFocalY, 100);
 });
 
 test('sold out and inactive products cannot be resolved for ordering', () => {
@@ -72,6 +85,32 @@ test('product migration is additive and preserves orders', async () => {
   assert.match(migration, /CREATE TABLE "product_option_groups"/);
   assert.match(migration, /CREATE TABLE "product_options"/);
   assert.doesNotMatch(migration, /DROP TABLE "orders"|DELETE FROM "orders"|UPDATE "orders"/);
+});
+
+test('image focal point migration is additive and preserves existing product content', async () => {
+  const migration = await readFile(new URL('../netlify/database/migrations/20260806214742_add_product_image_focal_points/migration.sql', import.meta.url), 'utf8');
+  assert.match(migration, /ADD COLUMN "image_focal_x" integer DEFAULT 50 NOT NULL/);
+  assert.match(migration, /ADD COLUMN "image_focal_y" integer DEFAULT 50 NOT NULL/);
+  assert.match(migration, /between 0 and 100/);
+  assert.doesNotMatch(migration, /UPDATE "products"|DELETE FROM|DROP TABLE|ALTER TABLE "orders"/);
+});
+
+test('focal point controls persist and render across product image surfaces', async () => {
+  const adminHtml = await readFile(new URL('../admin/products.html', import.meta.url), 'utf8');
+  const adminSource = await readFile(new URL('../admin/products.js', import.meta.url), 'utf8');
+  const menuSource = await readFile(new URL('../menu-products.js', import.meta.url), 'utf8');
+  const productSource = await readFile(new URL('../product-options.js', import.meta.url), 'utf8');
+  const publicSource = await readFile(new URL('../netlify/functions/products.mjs', import.meta.url), 'utf8');
+
+  assert.match(adminHtml, /name="imageFocalX"[^>]+type="range"/);
+  assert.match(adminHtml, /name="imageFocalY"[^>]+type="range"/);
+  assert.match(adminHtml, /id="image-preview-stage"/);
+  assert.match(adminSource, /setFocalPointFromPointer/);
+  assert.match(adminSource, /body\.imageFocalX = clampImageFocalPoint/);
+  assert.match(menuSource, /productImagePosition\(product\)/);
+  assert.match(productSource, /image\.style\.objectPosition = productImagePosition\(product\)/);
+  assert.match(publicSource, /imageFocalX: product\.imageFocalX/);
+  assert.match(publicSource, /imageFocalY: product\.imageFocalY/);
 });
 
 test('public menu retains active and sold-out presentation rules', async () => {

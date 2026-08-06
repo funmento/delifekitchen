@@ -50,8 +50,12 @@
 }
 
 .product-visual img {
+  display: block;
   height: 100%;
+  inset: 0;
   object-fit: cover;
+  object-position: center;
+  position: absolute;
   transition: transform 0.8s cubic-bezier(.2, .7, .2, 1);
   width: 100%;
 }
@@ -272,7 +276,8 @@ input[type="radio"] + .option-control { border-radius: 50%; }
   }
 
   .product-visual {
-    min-height: 55vw;
+    height: clamp(390px, 55vw, 640px);
+    min-height: 0;
   }
 
   .product-details {
@@ -292,7 +297,7 @@ input[type="radio"] + .option-control { border-radius: 50%; }
   }
 
   .product-visual {
-    min-height: 390px;
+    height: 390px;
   }
 
   .product-details h1 {

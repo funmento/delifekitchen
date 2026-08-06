@@ -1,5 +1,6 @@
 import { catalog, customizationSignature, resolveCustomizations } from './catalog.mjs';
 import { addCartItem, readCart, writeCart } from './cart.mjs';
+import { productImagePosition } from './image-focal.mjs';
 
 const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
 const pathSlug = window.location.pathname.split('/').pop().replace('.html', '');
@@ -8,6 +9,7 @@ let product = catalog[productId];
 const details = document.querySelector('.product-details');
 const addButton = document.querySelector('.quick-checkout');
 const priceLabel = document.querySelector('.product-price');
+const dynamicProductPage = document.body.hasAttribute('data-dynamic-product');
 
 try {
   const response = await fetch(`/api/products?slug=${encodeURIComponent(productId)}`);
@@ -16,13 +18,20 @@ try {
     product = data.product;
     catalog[productId] = product;
     document.title = `${product.name} | DeLife Kitchen`;
+    const description = product.fullDescription || product.shortDescription || 'Freshly prepared by DeLife Kitchen.';
+    document.querySelector('meta[name="description"]')?.setAttribute('content', description);
     document.querySelector('.product-details h1').textContent = product.name;
-    document.querySelector('.product-description').textContent = product.fullDescription || product.shortDescription;
+    document.querySelector('.product-description').textContent = description;
     document.querySelector('.product-category').textContent = product.category?.name || 'Delife Kitchen menu';
     document.querySelector('.product-breadcrumb span:last-child').textContent = product.name;
     const image = document.querySelector('.product-visual img');
     image.src = product.imageUrl;
     image.alt = `${product.name} prepared by DeLife Kitchen`;
+    image.style.objectPosition = productImagePosition(product);
+    if (dynamicProductPage) {
+      document.querySelector('[data-product-fact="category"]').textContent = product.category?.name || 'DeLife Kitchen menu';
+      document.querySelector('[data-product-fact="description"]').textContent = product.shortDescription || description;
+    }
   } else if (response.status === 404 || response.status === 410) {
     product = null;
   }
@@ -31,7 +40,8 @@ try {
 }
 
 if (!product && details) {
-  details.innerHTML = '<p class="product-category">Menu update</p><h1>Currently unavailable</h1><p class="product-description">This dish is not available to order right now. Please return to the menu to choose another favourite.</p><a class="quick-checkout" href="../menu.html">Back to menu <span aria-hidden="true">↗</span></a>';
+  details.innerHTML = '<p class="product-category">Menu update</p><h1>Currently unavailable</h1><p class="product-description">This dish is not available to order right now. Please return to the menu to choose another favourite.</p><a class="quick-checkout" href="/menu.html">Back to menu <span aria-hidden="true">↗</span></a>';
+  if (dynamicProductPage) document.querySelector('.product-facts')?.setAttribute('hidden', '');
 }
 
 if (product?.soldOut && details && addButton) {
@@ -153,7 +163,7 @@ if (product && !product.soldOut && details && addButton) {
     const cart = addCartItem(readCart(localStorage), item);
     writeCart(cart, localStorage);
     sessionStorage.removeItem('delifeOrder');
-    window.location.assign('../checkout.html');
+    window.location.assign('/checkout.html');
   });
   addButton.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') {

@@ -51,6 +51,18 @@ test('authenticated admins can upload an optimized product image', async () => {
   assert.equal(metadata.height, 900);
 });
 
+test('uploaded product images preserve their original aspect ratio', async () => {
+  const source = await sharp({
+    create: { width: 800, height: 1200, channels: 3, background: '#8f3f24' },
+  }).jpeg({ quality: 92 }).toBuffer();
+  const processed = await processProductImage(new File([source], 'portrait.jpg', { type: 'image/jpeg' }));
+  const metadata = await sharp(Buffer.from(processed.data)).metadata();
+
+  assert.equal(metadata.width, 600);
+  assert.equal(metadata.height, 900);
+  assert.equal(metadata.width / metadata.height, 800 / 1200);
+});
+
 test('invalid product image types are rejected server-side', async () => {
   const handler = createProductImageUploadHandler({ authenticate: async () => ({ id: 'admin-1' }), verifyOrigin: () => {}, store: memoryStore() });
   const response = await handler(uploadRequest(new File(['not an image'], 'dish.txt', { type: 'text/plain' })));
@@ -104,6 +116,19 @@ test('product pages retain uploaded and manually entered image URLs', async () =
   assert.match(menuSource, /product\.imageUrl/);
   assert.match(productSource, /image\.src = product\.imageUrl/);
   assert.match(adminSource, /elements\.imageUrl\.value = uploaded\.imageUrl/);
+});
+
+test('product image containers enforce consistent cover cropping', async () => {
+  const productCss = await readFile(new URL('../product.css', import.meta.url), 'utf8');
+  const menuCss = await readFile(new URL('../quick-order.css', import.meta.url), 'utf8');
+  const adminCss = await readFile(new URL('../admin/product-images.css', import.meta.url), 'utf8');
+
+  assert.match(productCss, /\.product-visual img[\s\S]*object-fit: cover;/);
+  assert.match(productCss, /\.product-visual img[\s\S]*position: absolute;/);
+  assert.match(menuCss, /\.menu-card-link[\s\S]*aspect-ratio: 11 \/ 10;/);
+  assert.match(menuCss, /\.menu-card-link img[\s\S]*height: 100%;[\s\S]*object-fit: cover;/);
+  assert.match(adminCss, /\.image-preview-stage[\s\S]*aspect-ratio: 7 \/ 8;/);
+  assert.match(adminCss, /\.image-preview img[\s\S]*object-fit: cover;/);
 });
 
 test('unauthenticated users cannot upload product images', async () => {

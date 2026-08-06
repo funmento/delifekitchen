@@ -12,6 +12,8 @@ const publicProduct = product => ({
   price: product.price,
   unitAmount: product.price,
   imageUrl: product.imageUrl,
+  imageFocalX: product.imageFocalX,
+  imageFocalY: product.imageFocalY,
   soldOut: product.soldOut,
   featured: product.featured,
   sortOrder: product.sortOrder,
