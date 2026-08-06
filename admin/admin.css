@@ -365,6 +365,7 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .status-paid, .status-completed { color: #24633d; background: #e3f2e7; }
 .status-preparing { color: #855313; background: #fff0cf; }
 .status-ready { color: #4b661c; background: #ebf6c8; }
+.status-out_for_delivery { color: #315f78; background: #e2f1f7; }
 .status-cancelled { color: #8d352f; background: #f8e2df; }
 .order-toggle { transition: transform .18s ease; }
 .order-card.is-open .order-toggle { transform: rotate(180deg); }
@@ -384,6 +385,13 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
 .prep-controls label { display: grid; flex: 1; gap: 7px; color: var(--muted); font-size: .67rem; font-weight: 800; }
 .prep-controls select { width: 100%; min-height: 40px; }
 .prep-controls .button { min-height: 40px; padding-inline: 12px; font-size: .67rem; }
+.delivery-agent-controls { display: grid; gap: 10px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.delivery-agent-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.delivery-agent-fields label { display: grid; gap: 6px; color: var(--muted); font-size: .67rem; font-weight: 800; }
+.delivery-agent-fields input, .delivery-link-field { width: 100%; min-height: 40px; font-size: .72rem; }
+.delivery-link-field { color: var(--green-deep); background: white; }
+.delivery-agent-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.delivery-agent-actions .button { min-height: 38px; padding-inline: 12px; font-size: .67rem; }
 .email-status { display: grid; gap: 8px; margin-top: 20px; padding: 16px; border-radius: 13px; background: #f0ede4; }
 .email-status .detail-title { margin-bottom: 2px; }
 .email-status p { margin: 0; color: var(--muted); font-size: .68rem; line-height: 1.45; }
@@ -456,6 +464,7 @@ input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rg
   .order-main .order-reference { grid-column: 1 / 4; }
   .order-main .order-meta { display: none; }
   .order-detail { grid-template-columns: 1fr; gap: 26px; padding: 22px 16px; }
+  .delivery-agent-fields { grid-template-columns: 1fr; }
   .pagination { justify-content: space-between; gap: 8px; }
   .pagination .button { min-height: 40px; padding-inline: 13px; font-size: .68rem; }
   .toast { right: 16px; bottom: 16px; left: 16px; max-width: none; }

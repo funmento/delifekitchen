@@ -41,12 +41,20 @@ export const orders = pgTable("orders", {
   amountTotal: integer("amount_total").notNull(),
   items: jsonb().$type<OrderItem[]>().notNull(),
   estimatedPrepMinutes: integer("estimated_prep_minutes"),
+  deliveryAgentName: text("delivery_agent_name"),
+  deliveryAgentPhone: text("delivery_agent_phone"),
+  deliveryTokenHash: text("delivery_token_hash"),
+  outForDeliveryAt: timestamp("out_for_delivery_at", { withTimezone: true }),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  deliveryCompletionNote: text("delivery_completion_note"),
   paidAt: timestamp("paid_at", { withTimezone: true }),
   merchantEmailSentAt: timestamp("merchant_email_sent_at", { withTimezone: true }),
   customerEmailSentAt: timestamp("customer_email_sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, table => [
+  uniqueIndex("orders_delivery_token_hash_idx").on(table.deliveryTokenHash),
+]);
 
 export const orderEmailDeliveries = pgTable("order_email_deliveries", {
   id: serial().primaryKey(),

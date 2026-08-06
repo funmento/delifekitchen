@@ -75,6 +75,10 @@ const dateInputValue = date => date.toISOString().slice(0, 10);
 const pounds = pence => Number.isInteger(pence) ? (pence / 100).toFixed(2) : '';
 const pence = value => value === '' || value === null ? null : Math.round(Number(value) * 100);
 const titleCase = value => value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : '';
+const statusLabel = status => ({
+  pending: 'Pending payment',
+  out_for_delivery: 'Out for delivery',
+}[status] || titleCase(status));
 
 const showNotice = (element, message, error = false) => {
   element.textContent = message;
@@ -256,7 +260,7 @@ const saveDeliverySettings = async event => {
 const renderStatusSummary = statuses => {
   elements.statusSummary.replaceChildren();
   const total = Math.max(1, statuses.reduce((sumValue, item) => sumValue + item.orderCount, 0));
-  const ordered = ['pending', 'paid', 'preparing', 'ready', 'completed', 'cancelled'];
+  const ordered = ['pending', 'paid', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled'];
   const statusMap = new Map(statuses.map(item => [item.status, item.orderCount]));
 
   ordered.forEach(status => {
@@ -266,7 +270,7 @@ const renderStatusSummary = statuses => {
     const head = document.createElement('div');
     head.className = 'status-row-head';
     const name = document.createElement('span');
-    name.textContent = status === 'pending' ? 'Pending payment' : status;
+    name.textContent = statusLabel(status);
     const value = document.createElement('strong');
     value.textContent = String(count);
     head.append(name, value);
@@ -373,7 +377,7 @@ const renderChart = daily => {
 const createStatusPill = status => {
   const pill = document.createElement('span');
   pill.className = `status-pill status-${status}`;
-  pill.textContent = status === 'pending' ? 'Pending payment' : status;
+  pill.textContent = statusLabel(status);
   return pill;
 };
 
@@ -419,7 +423,7 @@ const loadReport = async () => {
     elements.metricRevenue.textContent = money(report.summary.revenue, report.currency);
     elements.metricOrders.textContent = report.summary.orderCount.toLocaleString('en-GB');
     elements.metricAverage.textContent = money(report.summary.averageOrder, report.currency);
-    const active = report.statuses.filter(item => ['paid', 'preparing', 'ready'].includes(item.status)).reduce((sumValue, item) => sumValue + item.orderCount, 0);
+    const active = report.statuses.filter(item => ['paid', 'preparing', 'ready', 'out_for_delivery'].includes(item.status)).reduce((sumValue, item) => sumValue + item.orderCount, 0);
     elements.metricActive.textContent = active.toLocaleString('en-GB');
     elements.metricRange.textContent = `${elements.reportFrom.value} — ${elements.reportTo.value}`;
     renderStatusSummary(report.statuses);
@@ -553,6 +557,11 @@ const createOrderCard = order => {
     ['Notes', order.notes || '—'],
     ['Paid', order.paidAt ? longDate(order.paidAt) : 'Not yet'],
     ['Prep time', order.estimatedPrepMinutes ? `${order.estimatedPrepMinutes} minutes` : 'Not set'],
+    ['Out for delivery', order.outForDeliveryAt ? longDate(order.outForDeliveryAt) : '—'],
+    ['Delivered', order.deliveredAt ? longDate(order.deliveredAt) : '—'],
+    ['Delivery agent', order.deliveryAgentName || '—'],
+    ['Agent phone', order.deliveryAgentPhone || '—'],
+    ['Completion note', order.deliveryCompletionNote || '—'],
   ];
   fields.forEach(([label, value]) => {
     const wrapper = document.createElement('div');
@@ -590,6 +599,107 @@ const createOrderCard = order => {
   prepControls.append(prepLabel, savePrep);
   detailsSection.append(prepControls);
 
+  if (order.fulfilment === 'delivery') {
+    const deliveryControls = document.createElement('div');
+    deliveryControls.className = 'delivery-agent-controls';
+    const deliveryTitle = document.createElement('h3');
+    deliveryTitle.className = 'detail-title';
+    deliveryTitle.textContent = 'Delivery agent access';
+
+    const assignmentFields = document.createElement('div');
+    assignmentFields.className = 'delivery-agent-fields';
+    const agentNameLabel = document.createElement('label');
+    const agentNameText = document.createElement('span');
+    agentNameText.textContent = 'Agent name (optional)';
+    const agentName = document.createElement('input');
+    agentName.type = 'text';
+    agentName.maxLength = 100;
+    agentName.value = order.deliveryAgentName || '';
+    agentName.autocomplete = 'off';
+    agentNameLabel.append(agentNameText, agentName);
+    const agentPhoneLabel = document.createElement('label');
+    const agentPhoneText = document.createElement('span');
+    agentPhoneText.textContent = 'Agent phone (optional)';
+    const agentPhone = document.createElement('input');
+    agentPhone.type = 'tel';
+    agentPhone.maxLength = 40;
+    agentPhone.value = order.deliveryAgentPhone || '';
+    agentPhone.autocomplete = 'off';
+    agentPhoneLabel.append(agentPhoneText, agentPhone);
+    assignmentFields.append(agentNameLabel, agentPhoneLabel);
+
+    const linkField = document.createElement('input');
+    linkField.className = 'delivery-link-field';
+    linkField.type = 'text';
+    linkField.readOnly = true;
+    linkField.placeholder = order.hasDeliveryLink ? 'Active link exists — generate a new link to copy it' : 'Generate a secure link';
+    linkField.setAttribute('aria-label', `Delivery link for ${order.reference}`);
+
+    const deliveryActions = document.createElement('div');
+    deliveryActions.className = 'delivery-agent-actions';
+    const saveAgent = document.createElement('button');
+    saveAgent.type = 'button';
+    saveAgent.className = 'button button-secondary';
+    saveAgent.textContent = 'Save agent details';
+    saveAgent.addEventListener('click', () => updateOrder(order, {
+      deliveryAgentName: agentName.value,
+      deliveryAgentPhone: agentPhone.value,
+    }, saveAgent, 'Delivery agent details saved.'));
+
+    const generateLink = document.createElement('button');
+    generateLink.type = 'button';
+    generateLink.className = 'button button-primary';
+    generateLink.textContent = order.hasDeliveryLink ? 'Generate new delivery link' : 'Generate delivery agent link';
+    generateLink.disabled = ['pending', 'completed', 'cancelled'].includes(order.status);
+
+    const copyLink = document.createElement('button');
+    copyLink.type = 'button';
+    copyLink.className = 'button button-quiet';
+    copyLink.textContent = 'Copy delivery link';
+    copyLink.disabled = true;
+
+    generateLink.addEventListener('click', async () => {
+      const original = generateLink.textContent;
+      generateLink.disabled = true;
+      generateLink.textContent = 'Generating…';
+      try {
+        const data = await api('/api/admin/orders', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            id: order.id,
+            deliveryAgentName: agentName.value,
+            deliveryAgentPhone: agentPhone.value,
+            generateDeliveryLink: true,
+          }),
+        });
+        linkField.value = data.deliveryUrl;
+        copyLink.disabled = false;
+        generateLink.textContent = 'Generate new delivery link';
+        generateLink.disabled = false;
+        showToast(`${order.reference}: secure delivery link generated.`);
+      } catch (error) {
+        showNotice(elements.ordersNotice, error.message, true);
+        generateLink.textContent = original;
+        generateLink.disabled = false;
+      }
+    });
+
+    copyLink.addEventListener('click', async () => {
+      if (!linkField.value) return;
+      try {
+        await navigator.clipboard.writeText(linkField.value);
+        showToast(`${order.reference}: delivery link copied.`);
+      } catch {
+        linkField.select();
+        showNotice(elements.ordersNotice, 'Copy is unavailable in this browser. Select and copy the link manually.');
+      }
+    });
+
+    deliveryActions.append(saveAgent, generateLink, copyLink);
+    deliveryControls.append(deliveryTitle, assignmentFields, linkField, deliveryActions);
+    detailsSection.append(deliveryControls);
+  }
+
   const customerPaidDelivery = deliveryFor(order, 'customer', 'paid');
   const merchantPaidDelivery = deliveryFor(order, 'merchant', 'paid');
   const currentStatusDelivery = deliveryFor(order, 'customer', order.status);
@@ -605,7 +715,7 @@ const createOrderCard = order => {
   merchantEmailState.innerHTML = '<strong>Admin notification</strong>';
   merchantEmailState.append(document.createTextNode(emailStateLabel(order.merchantEmailSentAt, merchantPaidDelivery)));
   const statusEmailState = document.createElement('p');
-  statusEmailState.innerHTML = `<strong>${titleCase(order.status)} update</strong>`;
+  statusEmailState.innerHTML = `<strong>${statusLabel(order.status)} update</strong>`;
   statusEmailState.append(document.createTextNode(emailStateLabel(currentStatusDelivery?.sentAt, currentStatusDelivery)));
   emailStatus.append(emailTitle, customerEmailState, merchantEmailState, statusEmailState);
   detailsSection.append(emailStatus);
@@ -625,7 +735,7 @@ const createOrderCard = order => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = `button ${status === 'cancelled' ? 'button-secondary' : 'button-primary'}`;
-      button.textContent = status === 'cancelled' ? 'Cancel order' : `Mark ${status}`;
+      button.textContent = status === 'cancelled' ? 'Cancel order' : `Mark as ${statusLabel(status)}`;
       button.addEventListener('click', () => updateStatus(order, status, notifyCheckbox.checked, button));
       actions.append(button);
     });
@@ -636,7 +746,7 @@ const createOrderCard = order => {
     const sendUpdate = document.createElement('button');
     sendUpdate.type = 'button';
     sendUpdate.className = 'button button-quiet send-update';
-    sendUpdate.textContent = currentStatusDelivery?.state === 'sent' ? `${titleCase(order.status)} email sent` : 'Send customer update';
+    sendUpdate.textContent = currentStatusDelivery?.state === 'sent' ? `${statusLabel(order.status)} email sent` : 'Send customer update';
     sendUpdate.disabled = currentStatusDelivery?.state === 'sent' || currentStatusDelivery?.state === 'pending';
     sendUpdate.addEventListener('click', () => updateOrder(order, { sendCustomerUpdate: true }, sendUpdate, 'Customer update queued.'));
     detailsSection.append(sendUpdate);

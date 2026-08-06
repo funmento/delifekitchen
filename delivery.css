@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light;
+  --ink: #18322a;
+  --muted: #68766f;
+  --cream: #f4efe3;
+  --paper: #fffdf8;
+  --green: #164b3a;
+  --orange: #eb6334;
+  --line: #ded8ca;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { min-width: 320px; margin: 0; color: var(--ink); background: radial-gradient(circle at top right, #f6c878 0, transparent 27rem), var(--cream); }
+button, textarea { font: inherit; }
+.delivery-shell { width: min(100%, 680px); min-height: 100vh; margin: 0 auto; padding: 20px 14px 40px; }
+.delivery-header { display: flex; align-items: center; gap: 15px; padding: 8px 6px 22px; }
+.delivery-header img { width: 76px; height: 76px; object-fit: contain; }
+.delivery-header p, .section-kicker { margin: 0 0 5px; color: var(--orange); font-size: .7rem; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+.delivery-header h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(1.75rem, 7vw, 2.7rem); font-weight: 400; line-height: 1; }
+.delivery-notice { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255, 253, 248, .88); color: var(--muted); text-align: center; }
+.delivery-notice.is-error { border-color: #e2aaa2; color: #8d352f; background: #fff1ef; }
+.delivery-notice.is-success { border-color: #a7c8b5; color: var(--green); background: #edf8f1; }
+.delivery-card { overflow: hidden; border: 1px solid rgba(33, 68, 56, .14); border-radius: 24px; background: var(--paper); box-shadow: 0 24px 70px rgba(44, 56, 48, .12); }
+.delivery-hero { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px; color: white; background: var(--green); }
+.label { display: block; margin-bottom: 5px; color: inherit; opacity: .7; font-size: .67rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.delivery-hero strong { font-family: Georgia, serif; font-size: 1.45rem; font-weight: 400; }
+.status-pill { flex: 0 0 auto; padding: 8px 11px; border-radius: 999px; color: var(--green); background: #dff0c6; font-size: .68rem; font-weight: 850; }
+.delivery-section { padding: 24px 22px; border-bottom: 1px solid var(--line); }
+.delivery-section h2 { margin: 0; font-family: Georgia, serif; font-size: 1.65rem; font-weight: 400; }
+.address-section > a { display: inline-block; margin: 8px 0 18px; color: var(--green); font-weight: 800; }
+address { display: grid; gap: 4px; padding: 16px; border-radius: 14px; background: #f1eee5; font-style: normal; line-height: 1.5; }
+address strong { color: var(--orange); }
+.notes-block { margin-top: 17px; }
+.notes-block p { margin: 0; color: var(--muted); line-height: 1.55; }
+.section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.section-heading > strong { font-family: Georgia, serif; font-size: 1.4rem; font-weight: 400; }
+.delivery-items { display: grid; gap: 13px; }
+.delivery-item { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: start; }
+.delivery-item > span:first-child { color: var(--orange); font-weight: 900; }
+.delivery-item strong { display: block; font-size: .86rem; }
+.delivery-item small { display: block; margin-top: 3px; color: var(--muted); font-size: .72rem; line-height: 1.45; }
+.completion-form { display: grid; gap: 14px; padding: 24px 22px 27px; background: #f8f3e8; }
+.completion-form label { display: grid; gap: 7px; color: var(--muted); font-size: .72rem; font-weight: 800; }
+.completion-form textarea { width: 100%; resize: vertical; padding: 13px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: white; }
+.completion-form button { min-height: 54px; border: 0; border-radius: 14px; color: white; background: var(--orange); font-weight: 900; cursor: pointer; box-shadow: 0 10px 25px rgba(235, 99, 52, .25); }
+.completion-form button:disabled { cursor: wait; opacity: .65; }
+.completion-form > p { margin: 0; color: var(--muted); font-size: .68rem; text-align: center; }
+
+@media (min-width: 600px) {
+  .delivery-shell { padding-top: 34px; }
+  .delivery-section, .completion-form { padding-inline: 30px; }
+  .delivery-hero { padding-inline: 30px; }
+}
