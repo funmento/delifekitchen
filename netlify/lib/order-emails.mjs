@@ -138,6 +138,10 @@ const statusContent = {
     label: 'Your order is ready',
     message: 'Your order is ready for collection or the next delivery step.',
   },
+  out_for_delivery: {
+    label: 'Your order is out for delivery',
+    message: 'Your order has left the kitchen and is on its way to you.',
+  },
   completed: {
     label: 'Order completed',
     message: 'Your order has been completed. Thank you for ordering from DeLife Kitchen.',

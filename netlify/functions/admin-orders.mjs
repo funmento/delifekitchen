@@ -2,19 +2,24 @@ import { and, count, desc, eq, gte, ilike, inArray, lte, or } from 'drizzle-orm'
 import { verifyRequestOrigin } from '@netlify/identity';
 import { orderEmailDeliveries, orders } from '../../db/schema.js';
 import { requireAdmin, json } from '../lib/admin-auth.mjs';
+import { cleanDeliveryAssignment, createDeliveryToken, hashDeliveryToken } from '../lib/delivery-agent.mjs';
 import { sendCustomerStatusNotification } from '../lib/order-notifications.mjs';
 
 const PAGE_SIZE = 20;
-const ORDER_STATUSES = ['pending', 'paid', 'preparing', 'ready', 'completed', 'cancelled'];
-const NOTIFIABLE_STATUSES = new Set(['paid', 'preparing', 'ready', 'completed', 'cancelled']);
+const ORDER_STATUSES = ['pending', 'paid', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled'];
+const NOTIFIABLE_STATUSES = new Set(['paid', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled']);
 const transitions = {
   pending: ['cancelled'],
   paid: ['preparing', 'cancelled'],
   preparing: ['ready', 'cancelled'],
-  ready: ['completed', 'cancelled'],
+  ready: ['out_for_delivery', 'completed', 'cancelled'],
+  out_for_delivery: ['completed', 'cancelled'],
   completed: [],
   cancelled: [],
 };
+
+const allowedStatusesFor = order => (transitions[order.status] || [])
+  .filter(status => status !== 'out_for_delivery' || order.fulfilment === 'delivery');
 
 const parseDate = (value, endOfDay = false) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
@@ -60,13 +65,19 @@ const serializeOrder = (order, deliveries = []) => ({
   amountTotal: order.amountTotal,
   items: order.items,
   estimatedPrepMinutes: order.estimatedPrepMinutes,
+  deliveryAgentName: order.deliveryAgentName,
+  deliveryAgentPhone: order.deliveryAgentPhone,
+  hasDeliveryLink: Boolean(order.deliveryTokenHash),
+  outForDeliveryAt: order.outForDeliveryAt?.toISOString() || null,
+  deliveredAt: order.deliveredAt?.toISOString() || null,
+  deliveryCompletionNote: order.deliveryCompletionNote,
   paidAt: order.paidAt?.toISOString() || null,
   customerEmailSentAt: order.customerEmailSentAt?.toISOString() || null,
   merchantEmailSentAt: order.merchantEmailSentAt?.toISOString() || null,
   emailDeliveries: deliveries.map(serializeDelivery),
   createdAt: order.createdAt.toISOString(),
   updatedAt: order.updatedAt.toISOString(),
-  allowedStatuses: transitions[order.status] || [],
+  allowedStatuses: allowedStatusesFor(order),
 });
 
 const deliveryMapFor = deliveries => deliveries.reduce((map, delivery) => {
@@ -144,6 +155,10 @@ const updateOrder = async (req, context, db) => {
     : Number.parseInt(String(body.estimatedPrepMinutes), 10);
   const sendCustomerUpdate = body.sendCustomerUpdate === true;
   const notifyCustomer = body.notifyCustomer === true;
+  const hasDeliveryAgentName = body.deliveryAgentName !== undefined;
+  const hasDeliveryAgentPhone = body.deliveryAgentPhone !== undefined;
+  const generateDeliveryLink = body.generateDeliveryLink === true;
+  const deliveryAssignment = cleanDeliveryAssignment(body);
 
   if (!Number.isSafeInteger(id) || id < 1 || (hasStatus && !ORDER_STATUSES.includes(status))) {
     return json({ error: 'Invalid order update.' }, { status: 400 });
@@ -151,14 +166,23 @@ const updateOrder = async (req, context, db) => {
   if (hasPrepTime && estimatedPrepMinutes !== null && (!Number.isSafeInteger(estimatedPrepMinutes) || estimatedPrepMinutes < 5 || estimatedPrepMinutes > 180)) {
     return json({ error: 'Preparation time must be between 5 and 180 minutes.' }, { status: 400 });
   }
-  if (!hasStatus && !hasPrepTime && !sendCustomerUpdate) {
+  if (!hasStatus && !hasPrepTime && !sendCustomerUpdate && !hasDeliveryAgentName && !hasDeliveryAgentPhone && !generateDeliveryLink) {
     return json({ error: 'Choose an order change.' }, { status: 400 });
   }
 
   const [order] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
   if (!order) return json({ error: 'Order not found.' }, { status: 404 });
+  if ((hasDeliveryAgentName || hasDeliveryAgentPhone || generateDeliveryLink) && order.fulfilment !== 'delivery') {
+    return json({ error: 'Delivery agent details are only available for delivery orders.' }, { status: 409 });
+  }
+  if (generateDeliveryLink && ['pending', 'completed', 'cancelled'].includes(order.status)) {
+    return json({ error: 'Delivery links are available for active paid delivery orders.' }, { status: 409 });
+  }
 
   const statusChanged = hasStatus && order.status !== status;
+  if (statusChanged && status === 'out_for_delivery' && order.fulfilment !== 'delivery') {
+    return json({ error: 'Only delivery orders can be marked out for delivery.' }, { status: 409 });
+  }
   if (statusChanged && !(transitions[order.status] || []).includes(status)) {
     return json({ error: `Orders cannot move from ${order.status} to ${status}.` }, { status: 409 });
   }
@@ -166,9 +190,19 @@ const updateOrder = async (req, context, db) => {
   const changes = { updatedAt: new Date() };
   if (statusChanged) changes.status = status;
   if (hasPrepTime) changes.estimatedPrepMinutes = estimatedPrepMinutes;
+  if (hasDeliveryAgentName) changes.deliveryAgentName = deliveryAssignment.deliveryAgentName;
+  if (hasDeliveryAgentPhone) changes.deliveryAgentPhone = deliveryAssignment.deliveryAgentPhone;
+  if (statusChanged && status === 'out_for_delivery') changes.outForDeliveryAt = changes.updatedAt;
+  if (statusChanged && ['completed', 'cancelled'].includes(status)) changes.deliveryTokenHash = null;
+
+  let deliveryToken = null;
+  if (generateDeliveryLink) {
+    deliveryToken = createDeliveryToken();
+    changes.deliveryTokenHash = hashDeliveryToken(deliveryToken);
+  }
 
   let updated = order;
-  if (statusChanged || hasPrepTime) {
+  if (statusChanged || hasPrepTime || hasDeliveryAgentName || hasDeliveryAgentPhone || generateDeliveryLink) {
     const where = statusChanged
       ? and(eq(orders.id, id), eq(orders.status, order.status))
       : eq(orders.id, id);
@@ -190,7 +224,11 @@ const updateOrder = async (req, context, db) => {
   }
 
   const deliveries = await loadDeliveries(db, [updated.id]);
-  return json({ order: serializeOrder(updated, deliveries), notificationQueued: shouldNotify });
+  return json({
+    order: serializeOrder(updated, deliveries),
+    notificationQueued: shouldNotify,
+    ...(deliveryToken ? { deliveryUrl: new URL(`/delivery/${deliveryToken}`, req.url).href } : {}),
+  });
 };
 
 export default async (req, context) => {

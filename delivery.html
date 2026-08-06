@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Delivery · DeLife Kitchen</title>
+  <link rel="icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/delivery.css">
+</head>
+<body>
+  <main class="delivery-shell">
+    <header class="delivery-header">
+      <img src="/assets/brand/delife-kitchen-logo.webp" alt="DeLife Kitchen">
+      <div>
+        <p>Delivery handoff</p>
+        <h1 id="page-title">Loading delivery…</h1>
+      </div>
+    </header>
+
+    <div class="delivery-notice" id="delivery-notice" role="status">Checking the secure delivery link.</div>
+
+    <article class="delivery-card" id="delivery-card" hidden>
+      <section class="delivery-hero">
+        <div>
+          <span class="label">Order reference</span>
+          <strong id="order-reference"></strong>
+        </div>
+        <span class="status-pill" id="order-status"></span>
+      </section>
+
+      <section class="delivery-section address-section">
+        <p class="section-kicker">Drop-off</p>
+        <h2 id="customer-name"></h2>
+        <a id="customer-phone"></a>
+        <address>
+          <span id="delivery-address"></span>
+          <strong id="postcode"></strong>
+        </address>
+        <div class="notes-block">
+          <span class="label">Delivery notes</span>
+          <p id="delivery-notes"></p>
+        </div>
+      </section>
+
+      <section class="delivery-section">
+        <div class="section-heading">
+          <div><p class="section-kicker">Kitchen check</p><h2>Items</h2></div>
+          <strong id="total-paid"></strong>
+        </div>
+        <div class="delivery-items" id="delivery-items"></div>
+      </section>
+
+      <form class="completion-form" id="completion-form">
+        <label for="completion-note">
+          <span>Delivery note (optional)</span>
+          <textarea id="completion-note" name="deliveryCompletionNote" maxlength="500" rows="3" placeholder="e.g. Handed to customer at the door"></textarea>
+        </label>
+        <button type="submit" id="complete-delivery">Mark as delivered</button>
+        <p>Only confirm after the customer has received this order.</p>
+      </form>
+    </article>
+  </main>
+  <script type="module" src="/delivery.js"></script>
+</body>
+</html>
