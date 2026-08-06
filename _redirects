@@ -3,3 +3,4 @@
 /admin/products  /admin/products.html  200
 /delivery/*  /delivery.html  200
 /products/*  /product.html  200
+/admin/discounts /admin/discounts.html 200

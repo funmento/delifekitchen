@@ -1,6 +1,6 @@
-import { eq, or } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { db } from '../../db/index.js';
-import { orders } from '../../db/schema.js';
+import { orders, promotionUsage } from '../../db/schema.js';
 import { sendPaidOrderNotifications } from '../lib/order-notifications.mjs';
 import {
   paidOrderChanges,
@@ -51,6 +51,8 @@ export default async (req, context) => {
     .set(paidOrderChanges(order, payment))
     .where(eq(orders.id, order.id))
     .returning();
+
+  await db.update(promotionUsage).set({ status: 'used', usedAt: new Date() }).where(and(eq(promotionUsage.orderId, paidOrder.id), eq(promotionUsage.status, 'reserved')));
 
   const notifications = sendPaidOrderNotifications(paidOrder).catch(error => {
     console.error('Order notification task failed', error instanceof Error ? error.message : 'UnknownError');

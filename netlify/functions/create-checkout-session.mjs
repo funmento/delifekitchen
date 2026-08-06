@@ -22,6 +22,8 @@ const createOrderReference = () => {
 export const createCheckoutSessionHandler = ({
   database = null,
   ordersTable = null,
+  promotionsTable = null,
+  promotionUsageTable = null,
   env = globalThis.Netlify?.env,
   stripeFetch = fetch,
   loadDeliverySettings = async databaseClient => {
@@ -30,6 +32,8 @@ export const createCheckoutSessionHandler = ({
   },
   validatePostcode = validateDeliveryPostcode,
   loadProducts = async (databaseClient, slugs) => (await import('../lib/products.mjs')).loadCatalog(databaseClient, { slugs }),
+  validatePromotion = async input => (await import('../lib/promotions.mjs')).validatePromotionForCheckout(input),
+  reserveUsage = async input => (await import('../lib/promotions.mjs')).reservePromotionUsage(input),
 } = {}) => async req => {
   if (req.method !== 'POST') return Response.json({ error: 'Method not allowed.' }, { status: 405 });
 
@@ -52,6 +56,7 @@ export const createCheckoutSessionHandler = ({
   const collectionTime = clean(body.collectionTime, 100);
   const notes = clean(body.notes, 400);
   const items = Array.isArray(body.items) ? body.items.slice(0, 30) : [];
+  const discountCode = clean(body.discountCode, 40).toUpperCase();
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   if (!name || !validEmail || !phone || !fulfilment) {
@@ -88,6 +93,8 @@ export const createCheckoutSessionHandler = ({
 
   let activeDatabase = database;
   let activeOrdersTable = ordersTable;
+  let activePromotionsTable = promotionsTable;
+  let activePromotionUsageTable = promotionUsageTable;
   if (!activeDatabase || !activeOrdersTable) {
     const [databaseModule, schemaModule] = await Promise.all([
       import('../../db/index.js'),
@@ -95,6 +102,8 @@ export const createCheckoutSessionHandler = ({
     ]);
     activeDatabase ||= databaseModule.db;
     activeOrdersTable ||= schemaModule.orders;
+    activePromotionsTable ||= schemaModule.promotions;
+    activePromotionUsageTable ||= schemaModule.promotionUsage;
   }
 
   const resolvedItems = await resolveCheckoutItems({ rawItems: items, database: activeDatabase, loadProducts });
@@ -107,11 +116,32 @@ export const createCheckoutSessionHandler = ({
     settings: deliverySettings,
   });
   if (!pricing.ok) return Response.json({ error: pricing.error }, { status: pricing.status });
-  const amountTotal = pricing.totalPence;
+  let promotionResult = null;
+  if (discountCode) {
+    try {
+      promotionResult = await validatePromotion({
+        database: activeDatabase,
+        promotionsTable: activePromotionsTable,
+        usageTable: activePromotionUsageTable,
+        code: discountCode,
+        items: orderItems,
+        subtotalPence: pricing.subtotalPence,
+        deliveryFeePence: pricing.deliveryFeePence,
+        customerEmail: email,
+      });
+    } catch (error) {
+      console.error('Promotion validation failed', error instanceof Error ? error.name : 'UnknownError');
+      return Response.json({ error: 'The discount code could not be checked. Please try again.' }, { status: 503 });
+    }
+    if (!promotionResult.ok) return Response.json({ error: promotionResult.error }, { status: promotionResult.status });
+  }
+  const discountAmountPence = promotionResult?.discountAmountPence || 0;
+  const amountTotal = pricing.totalPence - discountAmountPence;
   const orderReference = createOrderReference();
+  let createdOrderId = null;
 
   try {
-    await activeDatabase.insert(activeOrdersTable).values({
+    const orderValues = {
       reference: orderReference,
       customerName: name,
       customerEmail: email,
@@ -126,15 +156,28 @@ export const createCheckoutSessionHandler = ({
       deliveryPricingRule: pricing.pricingRule,
       orderSubtotalPence: pricing.subtotalPence,
       orderTotalPence: pricing.totalPence,
+      discountCodeUsed: promotionResult?.promotion.discountCode || null,
+      promotionName: promotionResult?.promotion.promotionName || null,
+      discountAmountPence: promotionResult ? discountAmountPence : null,
+      subtotalBeforeDiscountPence: promotionResult ? pricing.subtotalPence : null,
+      totalAfterDiscountPence: promotionResult ? amountTotal : null,
       notes: [
         fulfilment === 'collection' ? `Preferred collection time: ${collectionTime}` : '',
         notes,
       ].filter(Boolean).join('\n') || null,
       amountTotal,
       items: orderItems,
-    });
+    };
+    if (promotionResult) {
+      const [createdOrder] = await activeDatabase.insert(activeOrdersTable).values(orderValues).returning({ id: activeOrdersTable.id });
+      createdOrderId = createdOrder.id;
+      await reserveUsage({ database: activeDatabase, usageTable: activePromotionUsageTable, promotionId: promotionResult.promotion.id, orderId: createdOrderId, customerEmail: email, amountDiscountedPence: discountAmountPence });
+    } else {
+      await activeDatabase.insert(activeOrdersTable).values(orderValues);
+    }
   } catch (error) {
     console.error('Order creation failed', error instanceof Error ? error.name : 'UnknownError');
+    if (promotionResult) await activeDatabase.delete(activeOrdersTable).where(eq(activeOrdersTable.reference, orderReference));
     return Response.json({ error: 'Your order could not be prepared. Please try again.' }, { status: 500 });
   }
 
@@ -188,8 +231,11 @@ export const createCheckoutSessionHandler = ({
     delivery_fee_pence: String(pricing.deliveryFeePence),
     delivery_distance_miles: fulfilment === 'delivery' ? String(deliveryValidation.distanceMiles) : 'Not applicable (collection)',
     delivery_pricing_rule: pricing.pricingRule,
-    total_price: `${(pricing.totalPence / 100).toFixed(2)} GBP`,
+    total_price: `${(amountTotal / 100).toFixed(2)} GBP`,
     total_price_pence: String(amountTotal),
+    discount_code: promotionResult?.promotion.discountCode || 'None',
+    promotion_name: promotionResult?.promotion.promotionName || 'None',
+    discount_amount_pence: String(discountAmountPence),
     order_summary: orderItems.map(item => `${item.quantity}x ${item.name} (${customizationSummary(item.customizations)})`).join('; ').slice(0, 500),
   };
 
@@ -205,6 +251,29 @@ export const createCheckoutSessionHandler = ({
   }
 
   addMetadata(params, metadata);
+
+  if (discountAmountPence > 0) {
+    try {
+      const couponParams = new URLSearchParams({
+        duration: 'once',
+        currency: 'gbp',
+        amount_off: String(discountAmountPence),
+        name: `${promotionResult.promotion.promotionName} (${promotionResult.promotion.discountCode})`.slice(0, 100),
+      });
+      const couponResponse = await stripeFetch('https://api.stripe.com/v1/coupons', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${stripeSecretKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: couponParams,
+      });
+      const coupon = await couponResponse.json();
+      if (!couponResponse.ok || !coupon.id) throw new Error(coupon.error?.type || 'StripeCouponError');
+      params.set('discounts[0][coupon]', coupon.id);
+    } catch (error) {
+      console.error('Stripe discount creation failed', error instanceof Error ? error.name : 'UnknownError');
+      await activeDatabase.delete(activeOrdersTable).where(eq(activeOrdersTable.reference, orderReference));
+      return Response.json({ error: 'The discount could not be applied to secure payment. Please try again.' }, { status: 502 });
+    }
+  }
 
   try {
     const stripeResponse = await stripeFetch('https://api.stripe.com/v1/checkout/sessions', {

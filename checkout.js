@@ -8,6 +8,11 @@ const itemContainer = document.querySelector('#order-items');
 const subtotalLabel = document.querySelector('#order-subtotal');
 const deliveryFeeLabel = document.querySelector('#delivery-fee');
 const totalLabel = document.querySelector('#order-total');
+const discountLabel = document.querySelector('#discount-total');
+const discountRow = document.querySelector('#discount-total-row');
+const discountInput = document.querySelector('#discount-code');
+const discountButton = document.querySelector('#apply-discount');
+const discountStatus = document.querySelector('#discount-status');
 const submitButton = document.querySelector('#checkout-submit');
 const errorBox = document.querySelector('#checkout-error');
 const deliveryFields = document.querySelector('#delivery-fields');
@@ -22,6 +27,7 @@ const fulfilmentInputs = [...form.elements.fulfilment];
 let orderingAvailable = true;
 let deliveryQuote = null;
 let quotePending = false;
+let appliedDiscount = null;
 
 const requestedItem = new URLSearchParams(window.location.search).get('item');
 if (requestedItem && catalog[requestedItem]) {
@@ -55,6 +61,11 @@ const invalidateDeliveryQuote = (message = 'Enter your postcode to calculate del
   deliveryQuote = null;
   deliveryQuoteStatus.textContent = message;
 };
+const invalidateDiscount = (message = '') => {
+  appliedDiscount = null;
+  discountStatus.textContent = message;
+  discountStatus.className = 'discount-status';
+};
 
 const renderOrder = () => {
   if (!order.length) {
@@ -86,10 +97,13 @@ const renderOrder = () => {
   const isDelivery = selectedFulfilment() === 'delivery';
   const subtotal = deliveryQuote?.orderSubtotalPence ?? localSubtotal;
   const deliveryFee = isDelivery ? deliveryQuote?.deliveryFeePence : 0;
-  const total = isDelivery ? deliveryQuote?.orderTotalPence : subtotal;
+  const baseTotal = isDelivery ? deliveryQuote?.orderTotalPence : subtotal;
+  const total = appliedDiscount?.totalPence ?? baseTotal;
   subtotalLabel.textContent = currency.format(subtotal / 100);
   deliveryFeeLabel.textContent = Number.isInteger(deliveryFee) ? currency.format(deliveryFee / 100) : '—';
   totalLabel.textContent = Number.isInteger(total) ? currency.format(total / 100) : '—';
+  discountRow.hidden = !appliedDiscount;
+  discountLabel.textContent = appliedDiscount ? `-${currency.format(appliedDiscount.discountAmountPence / 100)}` : `-${currency.format(0)}`;
   submitButton.disabled = !orderingAvailable || quotePending || (isDelivery && !deliveryQuote);
 };
 
@@ -98,6 +112,7 @@ itemContainer.addEventListener('click', event => {
   if (!removeButton) return;
   const itemElement = removeButton.closest('.order-item');
   order = order.filter(item => item.signature !== itemElement.dataset.signature);
+  invalidateDiscount('Basket changed. Apply the code again.');
   writeCart(order.map(({ resolved, ...item }) => item), localStorage);
   if (selectedFulfilment() === 'delivery') invalidateDeliveryQuote('Basket changed. Recalculate delivery before payment.');
   renderOrder();
@@ -188,10 +203,12 @@ const requestDeliveryQuote = async () => {
 };
 
 fulfilmentInputs.forEach(input => input.addEventListener('change', event => {
+  invalidateDiscount('Fulfilment changed. Apply the code again.');
   setFulfilment(event.target.value);
   renderOrder();
 }));
 postcodeInput.addEventListener('input', () => {
+  invalidateDiscount('Postcode changed. Apply the code again.');
   invalidateDeliveryQuote('Postcode changed. Recalculate delivery before payment.');
   renderOrder();
 });
@@ -199,6 +216,44 @@ postcodeInput.addEventListener('blur', () => {
   if (selectedFulfilment() === 'delivery' && postcodeInput.value.trim().length >= 5 && !deliveryQuote) requestDeliveryQuote();
 });
 deliveryQuoteButton.addEventListener('click', requestDeliveryQuote);
+
+discountButton.addEventListener('click', async () => {
+  const discountCode = discountInput.value.trim().toUpperCase();
+  if (!discountCode || !order.length) {
+    invalidateDiscount('Enter a code to apply.');
+    discountStatus.classList.add('is-error');
+    return;
+  }
+  if (selectedFulfilment() === 'delivery' && !deliveryQuote) {
+    invalidateDiscount('Calculate delivery before applying a code.');
+    discountStatus.classList.add('is-error');
+    return;
+  }
+  discountButton.disabled = true;
+  discountButton.textContent = 'Checking…';
+  discountStatus.textContent = 'Checking this code securely…';
+  try {
+    const response = await fetch('/api/promotions/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ discountCode, customerEmail: form.elements.email.value, fulfilment: selectedFulfilment(), postcode: postcodeInput.value, items: checkoutItems() }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'This code could not be applied.');
+    appliedDiscount = result;
+    discountInput.value = result.discountCode;
+    discountStatus.textContent = `${result.promotionName} applied — you save ${currency.format(result.discountAmountPence / 100)}.`;
+    discountStatus.className = 'discount-status is-success';
+    renderOrder();
+  } catch (error) {
+    invalidateDiscount(error.message);
+    discountStatus.classList.add('is-error');
+    renderOrder();
+  } finally {
+    discountButton.disabled = false;
+    discountButton.textContent = 'Apply';
+  }
+});
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
@@ -227,6 +282,7 @@ form.addEventListener('submit', async event => {
     postcode: formData.get('postcode'),
     collectionTime: formData.get('collectionTime'),
     notes: formData.get('notes'),
+    discountCode: appliedDiscount?.discountCode || '',
     items: checkoutItems(),
   };
 
