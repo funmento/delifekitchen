@@ -28,19 +28,21 @@ export default async req => {
   }
 
   const paidFilter = and(isNotNull(orders.paidAt), gte(orders.paidAt, from), lte(orders.paidAt, to));
+  const legacyTotal = sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`;
+  const paidTotal = sql`coalesce(${orders.totalAfterDiscountPence}, ${legacyTotal})`;
   const [summaryRows, fulfilmentRows, dailyRows, statusRows] = await Promise.all([
     db.select({
       orderCount: count(),
-      revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`),
+      revenue: sum(paidTotal),
       foodRevenue: sum(sql`coalesce(${orders.orderSubtotalPence}, ${orders.amountTotal} - coalesce(${orders.deliveryFeePence}, 0))`),
       deliveryFeeRevenue: sum(sql`coalesce(${orders.deliveryFeePence}, 0)`),
     }).from(orders).where(paidFilter),
-    db.select({ fulfilment: orders.fulfilment, orderCount: count(), revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`) })
+    db.select({ fulfilment: orders.fulfilment, orderCount: count(), revenue: sum(paidTotal) })
       .from(orders).where(paidFilter).groupBy(orders.fulfilment),
     db.select({
       day: sql`to_char(date_trunc('day', ${orders.paidAt}), 'YYYY-MM-DD')`,
       orderCount: count(),
-      revenue: sum(sql`coalesce(${orders.orderTotalPence}, ${orders.amountTotal})`),
+      revenue: sum(paidTotal),
     }).from(orders).where(paidFilter).groupBy(sql`date_trunc('day', ${orders.paidAt})`)
       .orderBy(asc(sql`date_trunc('day', ${orders.paidAt})`)),
     db.select({ status: orders.status, orderCount: count() }).from(orders).groupBy(orders.status),

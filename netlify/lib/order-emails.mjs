@@ -29,7 +29,13 @@ const itemSubtotalPence = order => Number.isInteger(order.orderSubtotalPence)
   ? order.orderSubtotalPence
   : order.items.reduce((total, item) => total + item.lineTotal, 0);
 const deliveryFeePence = order => Number.isInteger(order.deliveryFeePence) ? order.deliveryFeePence : 0;
-const orderTotalPence = order => Number.isInteger(order.orderTotalPence) ? order.orderTotalPence : order.amountTotal;
+const discountAmountPence = order => Number.isInteger(order.discountAmountPence) ? order.discountAmountPence : 0;
+const orderTotalPence = order => Number.isInteger(order.totalAfterDiscountPence) ? order.totalAfterDiscountPence : order.amountTotal;
+const promotionLines = order => discountAmountPence(order) > 0 ? [
+  `Promotion: ${order.promotionName || 'Promotion'}`,
+  `Discount code: ${order.discountCodeUsed}`,
+  `Discount: -${money(order).format(discountAmountPence(order) / 100)}`,
+] : [];
 const distanceText = order => Number.isFinite(order.deliveryDistanceMiles) ? `${order.deliveryDistanceMiles.toFixed(1)} miles` : '';
 
 const helpText = ({ helpEmail, helpPhone } = {}) => {
@@ -56,6 +62,7 @@ const orderDetailsText = (order, { includeCustomerContact = true } = {}) => {
     ...lines,
     '',
     `Item subtotal: ${currency.format(itemSubtotalPence(order) / 100)}`,
+    ...promotionLines(order),
     `Delivery fee: ${currency.format(deliveryFeePence(order) / 100)}`,
     `Total paid: ${currency.format(orderTotalPence(order) / 100)}`,
     ...(distanceText(order) ? [`Delivery distance: ${distanceText(order)}`] : []),
@@ -84,6 +91,7 @@ const orderDetailsHtml = (order, { includeCustomerContact = true } = {}) => {
       <table style="border-collapse:collapse;margin-top:24px;width:100%;">${rows}</table>
       <div style="margin-top:18px;text-align:right;">
         <p style="margin:4px 0;">Item subtotal: ${currency.format(itemSubtotalPence(order) / 100)}</p>
+        ${discountAmountPence(order) > 0 ? `<p style="margin:4px 0;">Promotion: ${escapeHtml(order.promotionName || 'Promotion')} (${escapeHtml(order.discountCodeUsed)})</p><p style="color:#2e653d;margin:4px 0;">Discount: -${currency.format(discountAmountPence(order) / 100)}</p>` : ''}
         <p style="margin:4px 0;">Delivery fee: ${currency.format(deliveryFeePence(order) / 100)}</p>
         <p style="font-size:20px;font-weight:700;margin:8px 0;">Total paid: ${currency.format(orderTotalPence(order) / 100)}</p>
         ${distanceText(order) ? `<p style="color:#666;font-size:12px;margin:4px 0;">Delivery distance: ${escapeHtml(distanceText(order))}</p>` : ''}
@@ -160,14 +168,14 @@ export const createStatusEmail = (order, status, help = {}, branding = {}) => {
 
   return {
     subject: `Delife Kitchen: ${content.label} — ${order.reference}`,
-    text: `Delife Kitchen · ${cuisineDescription}\n\nHi ${order.customerName},\n\n${message}\n\nOrder reference: ${order.reference}\nOrder status: ${status}\n${prepText(order) ? `${prepText(order)}\n` : ''}Item subtotal: ${money(order).format(itemSubtotalPence(order) / 100)}\nDelivery fee: ${money(order).format(deliveryFeePence(order) / 100)}\nTotal paid: ${money(order).format(orderTotalPence(order) / 100)}\n${distanceText(order) ? `Delivery distance: ${distanceText(order)}\n` : ''}${helpText(help)}`,
+    text: `Delife Kitchen · ${cuisineDescription}\n\nHi ${order.customerName},\n\n${message}\n\nOrder reference: ${order.reference}\nOrder status: ${status}\n${prepText(order) ? `${prepText(order)}\n` : ''}Item subtotal: ${money(order).format(itemSubtotalPence(order) / 100)}\n${promotionLines(order).join('\n')}${promotionLines(order).length ? '\n' : ''}Delivery fee: ${money(order).format(deliveryFeePence(order) / 100)}\nTotal paid: ${money(order).format(orderTotalPence(order) / 100)}\n${distanceText(order) ? `Delivery distance: ${distanceText(order)}\n` : ''}${helpText(help)}`,
     html: customerFrame(`
       <div style="background:#fff;max-width:620px;margin:0 auto;padding:30px;box-sizing:border-box;">
         <p style="color:#e95028;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Order ${escapeHtml(order.reference)}</p>
         <h1 style="font-family:Georgia,serif;font-size:30px;margin:0 0 18px;">${escapeHtml(content.label)}</h1>
         <p>${escapeHtml(message)}</p>
         ${prepText(order) ? `<p><strong>${escapeHtml(prepText(order))}</strong></p>` : ''}
-        <p style="margin-top:24px;">Item subtotal: ${money(order).format(itemSubtotalPence(order) / 100)}<br>Delivery fee: ${money(order).format(deliveryFeePence(order) / 100)}<br><strong>Total paid: ${money(order).format(orderTotalPence(order) / 100)}</strong>${distanceText(order) ? `<br>Delivery distance: ${escapeHtml(distanceText(order))}` : ''}</p>
+        <p style="margin-top:24px;">Item subtotal: ${money(order).format(itemSubtotalPence(order) / 100)}${discountAmountPence(order) > 0 ? `<br>Promotion: ${escapeHtml(order.promotionName || 'Promotion')} (${escapeHtml(order.discountCodeUsed)})<br>Discount: -${money(order).format(discountAmountPence(order) / 100)}` : ''}<br>Delivery fee: ${money(order).format(deliveryFeePence(order) / 100)}<br><strong>Total paid: ${money(order).format(orderTotalPence(order) / 100)}</strong>${distanceText(order) ? `<br>Delivery distance: ${escapeHtml(distanceText(order))}` : ''}</p>
         <p style="margin-top:28px;">${escapeHtml(helpText(help))}</p>
       </div>`, branding),
     ...(help.helpEmail ? { replyTo: help.helpEmail } : {}),

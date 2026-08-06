@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="brand.css" />
     <link rel="stylesheet" href="checkout.css" />
     <link rel="stylesheet" href="checkout-options.css" />
+    <link rel="stylesheet" href="promotion-banner.css" />
+    <link rel="stylesheet" href="checkout-promotions.css" />
   </head>
   <body>
     <div class="announcement">Secure checkout &middot; Collection or delivery &middot; Payment powered by Stripe</div>
@@ -64,11 +66,19 @@
 
           <label class="field order-notes"><span>Special instructions or allergies</span><textarea name="notes" rows="3" maxlength="400" placeholder="Allergies or anything else we should know"></textarea></label>
 
+          <section class="checkout-promotion" aria-labelledby="promotion-heading">
+            <div class="promotion-banner checkout-promotion-banner" data-promotion-banner hidden></div>
+            <div class="checkout-promotion-heading"><div><span>Save</span><h2 id="promotion-heading">Discount code</h2></div><p>Codes are checked securely against your basket.</p></div>
+            <div class="discount-code-row"><input id="discount-code" name="discountCode" type="text" maxlength="40" autocomplete="off" placeholder="e.g. XMAS10"><button id="apply-discount" type="button">Apply</button></div>
+            <p id="discount-status" class="discount-status" role="status"></p>
+          </section>
+
           <div class="order-review">
             <div class="order-review-title"><span>02</span><h2>Your order</h2><a href="menu.html">Edit order</a></div>
             <div id="order-items" class="order-items"></div>
             <dl class="order-totals">
               <div><dt>Item subtotal</dt><dd id="order-subtotal">£0.00</dd></div>
+              <div id="discount-total-row" hidden><dt>Discount</dt><dd id="discount-total">-£0.00</dd></div>
               <div><dt>Delivery fee</dt><dd id="delivery-fee">£0.00</dd></div>
               <div class="order-total"><dt>Total</dt><dd id="order-total">£0.00</dd></div>
             </dl>
@@ -80,6 +90,7 @@
         </form>
       </section>
     </main>
+    <script type="module" src="promotion-banner.js"></script>
     <script type="module" src="checkout.js"></script>
   </body>
 </html>

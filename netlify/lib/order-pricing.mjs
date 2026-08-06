@@ -51,6 +51,7 @@ export const resolveCheckoutItems = async ({ rawItems, database, loadProducts })
 
   const orderItems = consolidatedItems.map(item => ({
     id: item.id,
+    ...(Number.isInteger(item.product.categoryId ?? item.product.category?.id) ? { categoryId: item.product.categoryId ?? item.product.category.id } : {}),
     name: item.product.name,
     quantity: item.quantity,
     unitAmount: item.resolved.unitAmount,

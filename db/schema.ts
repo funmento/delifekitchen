@@ -2,6 +2,7 @@ import { boolean, index, integer, jsonb, pgTable, real, serial, text, timestamp,
 
 export type OrderItem = {
   id: string;
+  categoryId?: number | null;
   name: string;
   quantity: number;
   unitAmount: number;
@@ -36,6 +37,11 @@ export const orders = pgTable("orders", {
   deliveryPricingRule: text("delivery_pricing_rule"),
   orderSubtotalPence: integer("order_subtotal_pence"),
   orderTotalPence: integer("order_total_pence"),
+  discountCodeUsed: text("discount_code_used"),
+  promotionName: text("promotion_name"),
+  discountAmountPence: integer("discount_amount_pence"),
+  subtotalBeforeDiscountPence: integer("subtotal_before_discount_pence"),
+  totalAfterDiscountPence: integer("total_after_discount_pence"),
   notes: text(),
   currency: text().notNull().default("gbp"),
   amountTotal: integer("amount_total").notNull(),
@@ -154,4 +160,43 @@ export const productOptions = pgTable("product_options", {
 }, table => [
   uniqueIndex("product_options_group_key_idx").on(table.groupId, table.key),
   index("product_options_group_active_sort_idx").on(table.groupId, table.active, table.sortOrder),
+]);
+
+export const promotions = pgTable("promotions", {
+  id: serial().primaryKey(),
+  promotionName: text("promotion_name").notNull(),
+  promotionMessage: text("promotion_message").notNull(),
+  discountCode: text("discount_code").notNull().unique(),
+  discountType: text("discount_type").notNull(),
+  discountValue: integer("discount_value").notNull().default(0),
+  active: boolean().notNull().default(true),
+  startDate: timestamp("start_date", { withTimezone: true }),
+  endDate: timestamp("end_date", { withTimezone: true }),
+  maximumUses: integer("maximum_uses"),
+  maximumUsesPerCustomer: integer("maximum_uses_per_customer"),
+  minimumOrderValuePence: integer("minimum_order_value_pence"),
+  appliesTo: text("applies_to").notNull().default("entire_order"),
+  categoryIds: jsonb("category_ids").$type<number[]>().notNull().default([]),
+  productIds: jsonb("product_ids").$type<string[]>().notNull().default([]),
+  showBanner: boolean("show_banner").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  index("promotions_active_dates_idx").on(table.active, table.startDate, table.endDate),
+]);
+
+export const promotionUsage = pgTable("promotion_usage", {
+  id: serial().primaryKey(),
+  promotionId: integer("promotion_id").notNull().references(() => promotions.id, { onDelete: "restrict" }),
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  customerEmail: text("customer_email").notNull(),
+  amountDiscountedPence: integer("amount_discounted_pence").notNull(),
+  status: text().notNull().default("reserved"),
+  reservedUntil: timestamp("reserved_until", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("promotion_usage_order_idx").on(table.orderId),
+  index("promotion_usage_promotion_status_idx").on(table.promotionId, table.status),
+  index("promotion_usage_customer_idx").on(table.promotionId, table.customerEmail),
 ]);

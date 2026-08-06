@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'">
+  <title>Promotions | Delife Kitchen</title>
+  <link rel="icon" href="/favicon.ico"><link rel="stylesheet" href="/admin/admin.css"><link rel="stylesheet" href="/admin/discounts.css">
+  <script type="module" src="/admin/discounts.js"></script>
+</head>
+<body><div class="grain" aria-hidden="true"></div>
+  <section class="login-screen" id="access-denied" hidden><div class="login-card"><p class="eyebrow">Admin access</p><h1>Sign in required.</h1><p>Open the admin dashboard and sign in with an administrator account.</p><a class="button button-primary" href="/admin/">Open admin</a></div></section>
+  <div class="app-shell" id="discount-app" hidden>
+    <aside class="sidebar">
+      <a class="wordmark wordmark-sidebar" href="/"><img class="wordmark-icon" src="/assets/brand/delife-kitchen-icon.png" alt="Delife Kitchen"><span>Delife Kitchen</span></a>
+      <nav class="nav" aria-label="Admin navigation"><a class="nav-item" href="/admin/"><span class="nav-icon">⌁</span>Overview</a><a class="nav-item" href="/admin/"><span class="nav-icon">≡</span>Orders</a><a class="nav-item" href="/admin/products"><span class="nav-icon">◇</span>Products</a><a class="nav-item is-active" href="/admin/discounts"><span class="nav-icon">%</span>Promotions</a><a class="nav-item" href="/admin/settings"><span class="nav-icon">⊙</span>Delivery settings</a></nav>
+      <div class="sidebar-account"><div class="avatar" id="admin-initial">A</div><div class="account-copy"><strong id="admin-name">Admin</strong><span id="admin-email"></span></div><form action="/api/admin/logout" method="post"><button class="icon-button" type="submit" aria-label="Sign out">↪</button></form></div>
+    </aside>
+    <main class="dashboard discount-dashboard">
+      <header class="page-header"><div><p class="eyebrow">Seasonal campaigns</p><h1>Promotions,<br>on your terms.</h1><p class="muted">Create codes, publish banners, enforce limits and measure every paid redemption.</p></div><button class="button button-primary" id="new-promotion" type="button">New promotion</button></header>
+      <div class="notice" id="notice" hidden></div>
+      <section class="metrics discount-metrics"><article class="metric-card metric-revenue"><div class="metric-head"><span>Discount impact</span><span>−</span></div><strong id="metric-discount">£0.00</strong><span>Total discount on paid orders</span></article><article class="metric-card"><div class="metric-head"><span>Most used</span><span>↗</span></div><strong id="metric-most-used">—</strong><span>Top promotion</span></article><article class="metric-card metric-accent"><div class="metric-head"><span>Active</span><span>●</span></div><strong id="metric-active">0</strong><span>Running now</span></article><article class="metric-card"><div class="metric-head"><span>Expired</span><span>○</span></div><strong id="metric-expired">0</strong><span>Past campaigns</span></article></section>
+      <section class="discount-layout">
+        <div><div class="panel discount-tools"><input id="search" type="search" placeholder="Search promotions or codes"><select id="status-filter"><option value="">All statuses</option><option value="active">Active</option><option value="scheduled">Scheduled</option><option value="expired">Expired</option><option value="disabled">Disabled</option></select></div><div class="promotion-list" id="promotion-list"></div></div>
+        <aside><form class="panel promotion-form" id="promotion-form"><input type="hidden" name="id"><header class="panel-header"><div><p class="eyebrow">Promotion editor</p><h2 id="form-title">New promotion</h2></div></header>
+          <div class="promotion-grid"><label><span>Promotion name</span><input name="promotionName" maxlength="160" required></label><label><span>Discount code</span><input name="discountCode" maxlength="40" required></label><label class="wide"><span>Promotion message</span><textarea name="promotionMessage" rows="3" maxlength="500" required></textarea></label><label><span>Discount type</span><select name="discountType"><option value="percentage">Percentage</option><option value="fixed_amount">Fixed amount</option><option value="free_delivery">Free delivery</option></select></label><label><span id="discount-value-label">Discount value (%)</span><input name="discountValue" type="number" min="0" step="0.01" required></label><label><span>Start date</span><input name="startDate" type="datetime-local"></label><label><span>End date</span><input name="endDate" type="datetime-local"></label><label><span>Maximum uses</span><input name="maximumUses" type="number" min="1"></label><label><span>Uses per customer</span><input name="maximumUsesPerCustomer" type="number" min="1"></label><label><span>Minimum order (£)</span><input name="minimumOrderValue" type="number" min="0" step="0.01"></label><label><span>Applies to</span><select name="appliesTo"><option value="entire_order">Entire order</option><option value="food_only">Food only</option><option value="delivery_fee_only">Delivery fee only</option><option value="specific_categories">Specific categories</option><option value="specific_products">Specific products</option></select></label><label class="wide restriction" id="category-restriction" hidden><span>Categories</span><select name="categoryIds" multiple size="5"></select></label><label class="wide restriction" id="product-restriction" hidden><span>Products</span><select name="productIds" multiple size="7"></select></label></div>
+          <div class="toggle-row"><label><input name="active" type="checkbox" checked><span>Active</span></label><label><input name="showBanner" type="checkbox"><span>Show on website</span></label></div><div class="editor-actions"><button class="button button-secondary" id="cancel-edit" type="button">Clear</button><button class="button button-primary" type="submit">Save promotion</button></div>
+        </form></aside>
+      </section>
+    </main>
+  </div>
+</body></html>
