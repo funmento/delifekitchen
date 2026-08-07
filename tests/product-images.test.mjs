@@ -95,14 +95,48 @@ test('replacing an image generates a new stable URL', async () => {
 test('uploaded images render through the public product image endpoint', async () => {
   const optimized = await processProductImage(await imageFile());
   const store = memoryStore();
+  let getOptions;
+  const get = store.get;
+  store.get = async (key, options) => {
+    getOptions = options;
+    return get(key);
+  };
   await store.set('jollof-rice-public.webp', optimized.data);
-  const handler = createProductImageHandler({ store });
+  const times = [10, 12, 18];
+  const handler = createProductImageHandler({ store, now: () => times.shift() });
   const response = await handler(new Request('https://example.test/api/product-images/jollof-rice-public.webp'));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Content-Type'), 'image/webp');
-  assert.match(response.headers.get('Cache-Control'), /immutable/);
+  assert.equal(response.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+  assert.equal(response.headers.get('CDN-Cache-Control'), 'public, max-age=31536000, immutable');
+  assert.equal(response.headers.get('Netlify-CDN-Cache-Control'), 'public, durable, max-age=31536000, immutable');
+  assert.equal(response.headers.get('Server-Timing'), 'blob;dur=6.0, handler;dur=8.0');
+  assert.deepEqual(getOptions, { type: 'stream' });
   assert.ok((await response.arrayBuffer()).byteLength > 0);
+});
+
+test('HEAD image requests avoid downloading the Blob body', async () => {
+  let bodyReads = 0;
+  let metadataReads = 0;
+  const handler = createProductImageHandler({
+    store: {
+      get: async () => {
+        bodyReads += 1;
+        return new ArrayBuffer(1);
+      },
+      getMetadata: async () => {
+        metadataReads += 1;
+        return { metadata: {} };
+      },
+    },
+  });
+  const response = await handler(new Request('https://example.test/api/product-images/jollof-rice-public.webp', { method: 'HEAD' }));
+
+  assert.equal(response.status, 200);
+  assert.equal(bodyReads, 0);
+  assert.equal(metadataReads, 1);
+  assert.equal((await response.arrayBuffer()).byteLength, 0);
 });
 
 test('product pages retain uploaded and manually entered image URLs', async () => {
